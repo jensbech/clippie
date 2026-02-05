@@ -2,6 +2,8 @@ import readline from 'readline';
 import { mkdirSync, existsSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { homedir } from 'os';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { getConfigPath, getDefaultDbPath, saveConfig, ensureConfigDir } from '../lib/config.js';
 
 function createInterface() {
@@ -94,11 +96,27 @@ export async function runSetup() {
   if (process.platform === 'darwin') {
     const installDaemon = await question(rl, 'Install and start the clipboard monitoring daemon? [Y/n] ');
     if (installDaemon.toLowerCase() !== 'n') {
-      console.log('\nNext steps:');
-      console.log('  1. Run: clippy-install');
-      console.log('  2. Run: clippy-start');
-      console.log('  3. Verify: clippy-status');
-      console.log('');
+      try {
+        // Get bin directory path
+        const currentDir = dirname(fileURLToPath(import.meta.url));
+        const scriptDir = resolve(currentDir, '../../bin');
+
+        console.log('\nInstalling daemon...');
+        execSync(`${scriptDir}/clippy-install`, { stdio: 'inherit' });
+
+        console.log('\nStarting daemon...');
+        execSync(`${scriptDir}/clippy-start`, { stdio: 'inherit' });
+
+        // Small delay for daemon to initialize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        console.log('\nDaemon status:');
+        execSync(`${scriptDir}/clippy-status`, { stdio: 'inherit' });
+
+      } catch (e) {
+        console.error(`\nError setting up daemon: ${e.message}`);
+        console.log('You can manually run: clippy-install && clippy-start');
+      }
     }
   }
 

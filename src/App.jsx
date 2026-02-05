@@ -5,6 +5,7 @@ import StatusBar, { KeyHint } from './components/StatusBar.jsx';
 import ClickableRow from './components/ClickableRow.jsx';
 import PreviewPanel from './components/PreviewPanel.jsx';
 import { getEntries } from './lib/db.js';
+import { getDbPath } from './lib/config.js';
 import { relativeDate } from './lib/dates.js';
 import { Highlight } from './components/Highlight.jsx';
 
@@ -49,6 +50,10 @@ export default function App({ onSelect }) {
   const [filterText, setFilterText] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [message, setMessage] = useState(null);
+
+  // Get database path for display
+  const dbPath = getDbPath();
+  const dbPathShort = dbPath.split('/').slice(-2).join('/');
 
   const usableHeight = Math.max(5, Math.floor((terminalHeight - 6) * 0.95));
   const leftWidth = Math.floor((terminalWidth - 1) / 2);
@@ -195,7 +200,11 @@ export default function App({ onSelect }) {
         <PreviewPanel entry={currentEntry} width={rightWidth} height={usableHeight} highlight={filterText} />
       </Box>
 
-      <StatusBar>
+      <StatusBar
+        rightContent={!isFiltering && (
+          <Text color="gray">DB: {dbPathShort}</Text>
+        )}
+      >
         {isFiltering ? (
           <Text>
             <Text color="yellow">Filter: </Text>

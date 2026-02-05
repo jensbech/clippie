@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useOnClick } from '@ink-tools/ink-mouse';
 
-export default function StatusBar({ children }) {
+export default function StatusBar({ children, rightContent }) {
   const { stdout } = useStdout();
   const width = Math.max((stdout?.columns || 80) - 5, 60);
 
@@ -11,8 +11,11 @@ export default function StatusBar({ children }) {
       <Box>
         <Text color="gray">{'─'.repeat(width)}</Text>
       </Box>
-      <Box>
-        {children}
+      <Box justifyContent="space-between">
+        <Box>
+          {children}
+        </Box>
+        {rightContent && <Box>{rightContent}</Box>}
       </Box>
     </Box>
   );
