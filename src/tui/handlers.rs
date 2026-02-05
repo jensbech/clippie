@@ -15,7 +15,10 @@ impl EventHandler {
                 app.update_terminal_size(*w as usize, *h as usize);
                 false
             }
-            Event::Tick => false,
+            Event::Tick => {
+                app.on_tick();
+                false
+            }
         }
     }
 
@@ -42,7 +45,14 @@ impl EventHandler {
                 false
             }
             KeyCode::Char('r') if key.modifiers == KeyModifiers::NONE => {
-                app.show_message("Refresh not yet implemented");
+                match app.refresh() {
+                    Ok(_) => {
+                        app.show_message("Refreshed ↻");
+                    }
+                    Err(e) => {
+                        app.show_message(format!("Refresh failed: {}", e));
+                    }
+                }
                 false
             }
             KeyCode::Char('q') if key.modifiers == KeyModifiers::NONE => {

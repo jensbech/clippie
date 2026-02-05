@@ -1,4 +1,5 @@
-use crate::db::ClipboardEntry;
+use crate::db::{ClipboardEntry, Database};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct App {
@@ -23,6 +24,8 @@ pub struct App {
     pub terminal_height: usize,
     /// Database path (for display)
     pub db_path: String,
+    /// Tick counter for auto-refresh (refreshes every 50 ticks = ~5 seconds)
+    tick_count: usize,
 }
 
 impl App {
@@ -44,6 +47,7 @@ impl App {
             terminal_width,
             terminal_height,
             db_path,
+            tick_count: 0,
         }
     }
 
@@ -181,6 +185,36 @@ impl App {
     /// Get the database path for display
     pub fn get_db_path_short(&self) -> String {
         self.db_path.clone()
+    }
+
+    /// Refresh entries from the database
+    pub fn refresh(&mut self) -> crate::error::Result<()> {
+        let db = Database::open(&self.db_path)?;
+        let new_entries = db.get_all_entries()?;
+
+        // Update entries if they changed
+        if new_entries.len() != self.entries.len()
+            || new_entries.iter().zip(&self.entries).any(|(a, b)| {
+                a.content != b.content || a.last_copied != b.last_copied
+            })
+        {
+            self.entries = new_entries;
+            // Reset selection since order may have changed
+            self.selected_index = 0;
+            self.scroll_offset = 0;
+        }
+
+        Ok(())
+    }
+
+    /// Handle a tick event and perform auto-refresh if needed
+    pub fn on_tick(&mut self) {
+        self.tick_count += 1;
+        // Auto-refresh every 50 ticks (~5 seconds at 100ms per tick)
+        if self.tick_count >= 50 {
+            self.tick_count = 0;
+            let _ = self.refresh();
+        }
     }
 }
 
