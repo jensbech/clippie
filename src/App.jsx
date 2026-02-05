@@ -44,7 +44,8 @@ export default function App({ onSelect }) {
   const terminalWidth = stdout?.columns || 80;
   const terminalHeight = stdout?.rows || 24;
 
-  const [entries, setEntries] = useState(() => getEntries());
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [filterText, setFilterText] = useState('');
@@ -62,6 +63,19 @@ export default function App({ onSelect }) {
   const loadEntries = useCallback(() => {
     setEntries(getEntries());
     setMessage('Refreshed');
+  }, []);
+
+  // Load entries asynchronously after first render
+  useEffect(() => {
+    const loadInitialEntries = () => {
+      try {
+        const data = getEntries();
+        setEntries(data);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadInitialEntries();
   }, []);
 
   useEffect(() => {
@@ -155,7 +169,7 @@ export default function App({ onSelect }) {
 
   return (
     <Box flexDirection="column">
-      <Header title="History" subtitle={subtitle} />
+      <Header title="History" subtitle={subtitle} loading={loading} />
 
       <Box>
         {/* Left panel: list */}

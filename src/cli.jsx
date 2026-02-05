@@ -1,12 +1,8 @@
-import React from 'react';
-import { render } from 'ink';
-import { MouseProvider } from '@ink-tools/ink-mouse';
 import meow from 'meow';
 import { execSync } from 'child_process';
 import { dbExists, closeDb } from './lib/db.js';
 import { configExists } from './lib/config.js';
 import { runSetup } from './commands/setup.js';
-import App from './App.jsx';
 
 const cli = meow(`
   Usage
@@ -51,6 +47,48 @@ const { fileURLToPath } = await import('url');
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const binDir = `${currentDir}/../bin`;
 
+// Lazy load TUI dependencies - only imported when actually needed
+async function launchTUI() {
+  const React = await import('react');
+  const { render } = await import('ink');
+  const { MouseProvider } = await import('@ink-tools/ink-mouse');
+  const { default: App } = await import('./App.jsx');
+
+  // Alternate screen buffer setup
+  process.stdout.write('\x1B[?1049h');
+  process.stdout.write('\x1B[H');
+
+  const restoreScreen = () => {
+    process.stdout.write('\x1B[?1049l');
+  };
+  process.on('SIGINT', () => { restoreScreen(); process.exit(0); });
+  process.on('SIGTERM', () => { restoreScreen(); process.exit(0); });
+
+  let selectedContent = null;
+
+  const instance = render(
+    React.default.createElement(MouseProvider, { cacheInvalidationMs: 0 },
+      React.default.createElement(App, {
+        onSelect: (content) => {
+          selectedContent = content;
+          try {
+            execSync('pbcopy', { input: content });
+          } catch (e) {
+            // pbcopy not available
+          }
+        },
+      })
+    )
+  );
+
+  await instance.waitUntilExit();
+  closeDb();
+  restoreScreen();
+  if (selectedContent) {
+    process.stdout.write(selectedContent + '\n');
+  }
+}
+
 // Handle subcommands
 const command = cli.input[0];
 
@@ -94,38 +132,6 @@ if (command === 'setup') {
     process.exit(1);
   }
 
-  // Alternate screen buffer
-  process.stdout.write('\x1B[?1049h');
-  process.stdout.write('\x1B[H');
-
-  const restoreScreen = () => {
-    process.stdout.write('\x1B[?1049l');
-  };
-  process.on('SIGINT', () => { restoreScreen(); process.exit(0); });
-  process.on('SIGTERM', () => { restoreScreen(); process.exit(0); });
-
-  let selectedContent = null;
-
-  const instance = render(
-    React.createElement(MouseProvider, { cacheInvalidationMs: 0 },
-      React.createElement(App, {
-        onSelect: (content) => {
-          selectedContent = content;
-          try {
-            execSync('pbcopy', { input: content });
-          } catch (e) {
-            // pbcopy not available
-          }
-        },
-      })
-    )
-  );
-
-  instance.waitUntilExit().then(() => {
-    closeDb();
-    restoreScreen();
-    if (selectedContent) {
-      process.stdout.write(selectedContent + '\n');
-    }
-  });
+  // Launch TUI with lazy-loaded dependencies
+  await launchTUI();
 }
