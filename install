@@ -1,0 +1,61 @@
+#!/bin/bash
+set -e
+
+FORGEJO_URL="https://git.bechsor.no"
+REPO="jens/clippie"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
+
+echo "🚀 Installing Clippie..."
+
+# Create install directory
+mkdir -p "$INSTALL_DIR"
+
+# Get latest release info from Forgejo API
+echo "📡 Fetching latest release..."
+API_URL="$FORGEJO_URL/api/v1/repos/$REPO/releases/latest"
+RELEASE_JSON=$(curl -fsSL "$API_URL")
+
+# Extract version
+VERSION=$(echo "$RELEASE_JSON" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4)
+if [ -z "$VERSION" ]; then
+    echo "❌ Could not find latest release"
+    exit 1
+fi
+
+echo "✓ Found version: $VERSION"
+
+# Find the aarch64 binary download URL
+DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url":"[^"]*aarch64[^"]*' | cut -d'"' -f4 | head -1)
+
+if [ -z "$DOWNLOAD_URL" ]; then
+    echo "❌ Could not find aarch64 binary for this release"
+    echo "Available downloads:"
+    echo "$RELEASE_JSON" | grep -o '"browser_download_url":"[^"]*' | cut -d'"' -f4 || true
+    exit 1
+fi
+
+echo "📥 Downloading from: $DOWNLOAD_URL"
+
+# Download and install
+TEMP_FILE=$(mktemp)
+curl -fsSL -o "$TEMP_FILE" "$DOWNLOAD_URL"
+mv "$TEMP_FILE" "$INSTALL_DIR/clippie"
+chmod +x "$INSTALL_DIR/clippie"
+
+echo "✓ Installed to: $INSTALL_DIR/clippie"
+
+# Check if in PATH
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo ""
+    echo "⚠️  $INSTALL_DIR is not in your PATH"
+    echo "Add this to ~/.zshrc or ~/.bash_profile:"
+    echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+    echo ""
+    echo "Then run: source ~/.zshrc"
+else
+    echo "✓ Already in PATH"
+fi
+
+echo ""
+echo "🎉 Installation complete!"
+echo "Run: clippie"

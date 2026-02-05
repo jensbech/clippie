@@ -18,3 +18,7 @@ Cargo.lock
 *~
 .env
 .env.local
+
+# Build output
+release/
+bin/

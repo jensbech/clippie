@@ -63,9 +63,9 @@ async fn run() -> Result<()> {
 async fn launch_tui() -> Result<()> {
     let config_manager = ConfigManager::new()?;
     if !config_manager.exists() {
-        eprintln!("Error: Clippie not configured.");
-        eprintln!("Run 'clippie setup' to configure the database location.");
-        process::exit(1);
+        println!("Welcome to Clippie! Let's set it up first.\n");
+        commands::run_setup().await?;
+        println!("\n");
     }
 
     let db_path = config_manager.get_db_path()?;
