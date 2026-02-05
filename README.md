@@ -1,4 +1,4 @@
-# Clippy
+# Clippie
 
 A fast, keyboard-driven clipboard history manager for macOS.
 
@@ -12,7 +12,7 @@ A fast, keyboard-driven clipboard history manager for macOS.
 
 ```bash
 git clone <repo-url>
-cd clippy
+cd clippie
 pnpm install
 pnpm build
 npm link  # optional: for global CLI access
@@ -21,7 +21,7 @@ npm link  # optional: for global CLI access
 ## Setup (One Command)
 
 ```bash
-clippy setup
+clippie setup
 ```
 
 This will:
@@ -35,14 +35,14 @@ Done! Everything is configured and running.
 ## Commands
 
 ```bash
-clippy              # Browse clipboard history
-clippy setup        # Configure database location
-clippy start        # Start the daemon
-clippy stop         # Stop the daemon
-clippy status       # Show daemon status
-clippy db <path>    # Swap to a database (or create new)
-clippy clear        # Delete history entries
-clippy clear --all  # Delete all history
+clippie              # Browse clipboard history
+clippie setup        # Configure database location
+clippie start        # Start the daemon
+clippie stop         # Stop the daemon
+clippie status       # Show daemon status
+clippie db <path>    # Swap to a database (or create new)
+clippie clear        # Delete history entries
+clippie clear --all  # Delete all history
 ```
 
 ### Swap Databases
@@ -51,8 +51,8 @@ Switch to an existing database or create a new one:
 
 ```bash
 # Use or create database
-clippy db ~/.local/share/clippy/backup.db
-clippy db /tmp/test-clipboard.db
+clippie db ~/.local/share/clippie/backup.db
+clippie db /tmp/test-clipboard.db
 ```
 
 The daemon automatically restarts to use the new database.
@@ -60,8 +60,8 @@ The daemon automatically restarts to use the new database.
 ### Help
 
 ```bash
-clippy -h       # Show all commands
-clippy --help   # Show help
+clippie -h       # Show all commands
+clippie --help   # Show help
 ```
 
 ### Keyboard Shortcuts
@@ -90,7 +90,7 @@ Add to `~/.zshrc`:
 
 ```bash
 cb() {
-  result=$(clippy)
+  result=$(clippie)
   [[ -n "$result" ]] && print -z "$result"
 }
 ```
@@ -101,14 +101,14 @@ Then use `cb` to quickly access history.
 
 Check daemon status and logs:
 ```bash
-clippy-status
-tail -f ~/Library/Logs/clippy-daemon.err.log
+clippie status
+tail -f ~/Library/Logs/clippie-daemon.err.log
 ```
 
 Restart daemon:
 ```bash
-clippy-stop
-clippy-start
+clippie stop
+clippie start
 ```
 
 ## Development

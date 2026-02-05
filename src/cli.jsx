@@ -10,13 +10,13 @@ import App from './App.jsx';
 
 const cli = meow(`
   Usage
-    $ clippy                    Launch the clipboard history browser
-    $ clippy setup              Configure database location
-    $ clippy start              Start the daemon
-    $ clippy stop               Stop the daemon
-    $ clippy status             Show daemon status
-    $ clippy db <path>          Switch to a database
-    $ clippy clear [--all]      Clear history entries
+    $ clippie                   Launch the clipboard history browser
+    $ clippie setup             Configure database location
+    $ clippie start             Start the daemon
+    $ clippie stop              Stop the daemon
+    $ clippie status            Show daemon status
+    $ clippie db <path>         Switch to a database
+    $ clippie clear [--all]     Clear history entries
 
   Navigation
     j/k or arrows   Move up/down
@@ -83,14 +83,14 @@ if (command === 'setup') {
   // Check if config exists
   if (!configExists()) {
     console.error("Error: Clippy not configured.");
-    console.error("Run 'clippy setup' to configure the database location.");
+    console.error("Run 'clippie setup' to configure the database location.");
     process.exit(1);
   }
 
   if (!dbExists()) {
     console.error("Error: Clipboard history database not found.");
     console.error("Make sure the daemon is running: clippy-start");
-    console.error("Or configure a valid database location: clippy setup");
+    console.error("Or configure a valid database location: clippie setup");
     process.exit(1);
   }
 

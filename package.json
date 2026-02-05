@@ -1,5 +1,5 @@
 {
-  "name": "clippy",
+  "name": "clippie",
   "version": "1.0.0",
   "description": "A fast, keyboard-driven clipboard history manager for macOS",
   "type": "module",
@@ -8,11 +8,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://git.bechsor.no/jens/clippy"
+    "url": "https://git.bechsor.no/jens/clippie"
   },
   "keywords": ["clipboard", "history", "tui", "terminal", "macos"],
   "bin": {
-    "clippy": "./dist/cli.js"
+    "clippie": "./dist/cli.js"
   },
   "files": ["dist/", "bin/", "README.md", "LICENSE"],
   "engines": { "node": ">=18.0.0" },
