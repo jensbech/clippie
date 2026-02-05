@@ -97,9 +97,9 @@ export async function runSetup() {
     const installDaemon = await question(rl, 'Install and start the clipboard monitoring daemon? [Y/n] ');
     if (installDaemon.toLowerCase() !== 'n') {
       try {
-        // Get bin directory path
+        // Get bin directory path (relative to dist directory where compiled code runs)
         const currentDir = dirname(fileURLToPath(import.meta.url));
-        const scriptDir = resolve(currentDir, '../../bin');
+        const scriptDir = resolve(currentDir, '../bin');
 
         console.log('\nInstalling daemon...');
         execSync(`${scriptDir}/clippy-install`, { stdio: 'inherit' });
