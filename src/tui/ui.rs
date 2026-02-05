@@ -53,7 +53,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         visible_entries,
         app.selected_index,
         app.scroll_offset,
-        &app.filter_text,
+        &app.filter_text, // Pass filter text for live highlighting
     );
 
     // Draw divider
@@ -66,7 +66,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     // Draw preview
     let current_entry = app.current_entry();
-    draw_preview(f, preview_area, current_entry);
+    draw_preview(f, preview_area, current_entry, &app.filter_text);
 
     // Draw status bar
     draw_status_bar(
