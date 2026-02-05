@@ -18,23 +18,8 @@ pub enum CliError {
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 
-    #[error("TUI error: {0}")]
-    TuiError(String),
-
-    #[error("Invalid database path: {0}")]
-    InvalidDbPath(String),
-
-    #[error("Database not found at {0}. Run 'clippie setup' to configure.", path)]
-    DatabaseNotFound { path: String },
-
     #[error("Config not found. Run 'clippie setup' to configure the database location.")]
     ConfigNotFound,
-
-    #[error("Command error: {0}")]
-    CommandError(String),
-
-    #[error("Parsing error: {0}")]
-    ParseError(String),
 }
 
 pub type Result<T> = std::result::Result<T, CliError>;

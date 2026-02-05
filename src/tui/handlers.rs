@@ -1,6 +1,6 @@
 use super::app::App;
-use super::events::{Event, NavDirection};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
+use super::events::Event;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub struct EventHandler;
 
@@ -25,7 +25,6 @@ impl EventHandler {
         }
 
         match key.code {
-            // Navigation
             KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
                 app.select_up();
                 false
@@ -34,48 +33,35 @@ impl EventHandler {
                 app.select_down();
                 false
             }
-
-            // Enter to select
             KeyCode::Enter => {
                 app.select_entry();
-                true // Exit after selection
+                true
             }
-
-            // Filtering
             KeyCode::Char('/') if key.modifiers == KeyModifiers::NONE => {
                 app.start_filtering();
                 false
             }
-
-            // Refresh
             KeyCode::Char('r') if key.modifiers == KeyModifiers::NONE => {
                 app.show_message("Refresh not yet implemented");
                 false
             }
-
-            // Quit
             KeyCode::Char('q') if key.modifiers == KeyModifiers::NONE => {
                 if app.filter_text.is_empty() {
-                    true // Exit
+                    true
                 } else {
-                    // Clear filter instead
                     app.stop_filtering();
                     false
                 }
             }
             KeyCode::Esc => {
                 if app.filter_text.is_empty() {
-                    true // Exit
+                    true
                 } else {
-                    // Clear filter instead
                     app.stop_filtering();
                     false
                 }
             }
-
-            // Ctrl+C
             KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => true,
-
             _ => false,
         }
     }
@@ -103,7 +89,6 @@ impl EventHandler {
     }
 
     fn handle_mouse(_mouse: crossterm::event::MouseEvent, _app: &mut App) -> bool {
-        // Mouse handling to be implemented in future phases
         false
     }
 }

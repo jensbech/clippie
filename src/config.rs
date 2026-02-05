@@ -33,11 +33,6 @@ impl ConfigManager {
         })
     }
 
-    /// Get the configuration directory path
-    pub fn config_dir(&self) -> &Path {
-        &self.config_dir
-    }
-
     /// Get the configuration file path
     pub fn config_file(&self) -> &Path {
         &self.config_file
@@ -99,10 +94,6 @@ impl ConfigManager {
         Ok(home.join(".local").join("share").join("clippy").join("clipboard.db"))
     }
 
-    /// Get database path as string
-    pub fn get_db_path_str(&self) -> Result<String> {
-        Ok(self.get_db_path()?.to_string_lossy().to_string())
-    }
 }
 
 impl Default for ConfigManager {

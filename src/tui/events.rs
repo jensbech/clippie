@@ -1,4 +1,4 @@
-use crossterm::event::{self, Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use crossterm::event::{self, Event as CrosstermEvent, KeyEvent, MouseEvent};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -21,6 +21,7 @@ pub enum Event {
 
 pub struct EventHandler {
     rx: mpsc::UnboundedReceiver<Event>,
+    #[allow(dead_code)]
     tx: mpsc::UnboundedSender<Event>,
     stop: Arc<AtomicBool>,
 }
@@ -33,15 +34,12 @@ impl EventHandler {
         let stop_clone = Arc::clone(&stop);
         let tx_clone = tx.clone();
 
-        // Spawn event thread
         thread::spawn(move || {
             loop {
-                // Check if we should stop
                 if stop_clone.load(Ordering::Relaxed) {
                     break;
                 }
 
-                // Poll for events with timeout
                 if event::poll(Duration::from_millis(100)).unwrap_or(false) {
                     if let Ok(event) = event::read() {
                         match event {
@@ -59,7 +57,6 @@ impl EventHandler {
                     }
                 }
 
-                // Send tick event periodically
                 if stop_clone.load(Ordering::Relaxed) {
                     break;
                 }
@@ -83,29 +80,6 @@ impl Default for EventHandler {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Helper to check if a key matches a condition
-pub fn key_matches(key: &KeyEvent, code: KeyCode) -> bool {
-    key.code == code
-}
-
-/// Helper to check for navigation keys
-pub fn is_nav_key(key: &KeyEvent) -> Option<NavDirection> {
-    match key.code {
-        KeyCode::Up | KeyCode::Char('k') if key.modifiers == KeyModifiers::NONE => {
-            Some(NavDirection::Up)
-        }
-        KeyCode::Down | KeyCode::Char('j') if key.modifiers == KeyModifiers::NONE => {
-            Some(NavDirection::Down)
-        }
-        _ => None,
-    }
-}
-
-pub enum NavDirection {
-    Up,
-    Down,
 }
 
 #[cfg(test)]

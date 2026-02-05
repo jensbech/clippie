@@ -1,16 +1,13 @@
 use crate::error::{CliError, Result};
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
-use std::path::{Path, PathBuf};
+use rusqlite::{params, Connection};
+use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct ClipboardEntry {
-    pub id: i64,
     pub content: String,
-    pub content_hash: String,
     pub created_at: DateTime<Utc>,
     pub last_copied: DateTime<Utc>,
-    pub copy_count: i32,
 }
 
 pub struct Database {
@@ -67,57 +64,26 @@ impl Database {
     /// Get all clipboard entries ordered by last_copied (newest first)
     pub fn get_all_entries(&self) -> Result<Vec<ClipboardEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, content, content_hash, created_at, last_copied, copy_count
+            "SELECT content, created_at, last_copied
              FROM clipboard_entries
              ORDER BY last_copied DESC"
         )?;
 
         let entries = stmt.query_map([], |row| {
-            let created_ts: i64 = row.get(3)?;
-            let last_copied_ts: i64 = row.get(4)?;
+            let created_ts: i64 = row.get(1)?;
+            let last_copied_ts: i64 = row.get(2)?;
 
             Ok(ClipboardEntry {
-                id: row.get(0)?,
-                content: row.get(1)?,
-                content_hash: row.get(2)?,
+                content: row.get(0)?,
                 created_at: DateTime::<Utc>::from_timestamp(created_ts, 0)
                     .unwrap_or_else(|| Utc::now()),
                 last_copied: DateTime::<Utc>::from_timestamp(last_copied_ts, 0)
                     .unwrap_or_else(|| Utc::now()),
-                copy_count: row.get(5)?,
             })
         })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(entries)
-    }
-
-    /// Get a single entry by ID
-    pub fn get_entry(&self, id: i64) -> Result<Option<ClipboardEntry>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, content, content_hash, created_at, last_copied, copy_count
-             FROM clipboard_entries
-             WHERE id = ?1"
-        )?;
-
-        let entry = stmt.query_row(params![id], |row| {
-            let created_ts: i64 = row.get(3)?;
-            let last_copied_ts: i64 = row.get(4)?;
-
-            Ok(ClipboardEntry {
-                id: row.get(0)?,
-                content: row.get(1)?,
-                content_hash: row.get(2)?,
-                created_at: DateTime::<Utc>::from_timestamp(created_ts, 0)
-                    .unwrap_or_else(|| Utc::now()),
-                last_copied: DateTime::<Utc>::from_timestamp(last_copied_ts, 0)
-                    .unwrap_or_else(|| Utc::now()),
-                copy_count: row.get(5)?,
-            })
-        })
-            .optional()?;
-
-        Ok(entry)
     }
 
     /// Insert or update a clipboard entry
@@ -151,12 +117,6 @@ impl Database {
             }
             Err(e) => Err(CliError::DatabaseError(e)),
         }
-    }
-
-    /// Delete an entry by ID
-    pub fn delete_entry(&self, id: i64) -> Result<()> {
-        self.conn.execute("DELETE FROM clipboard_entries WHERE id = ?1", params![id])?;
-        Ok(())
     }
 
     /// Delete entries older than the given number of days
@@ -193,51 +153,6 @@ impl Database {
         Ok(size)
     }
 
-    /// Get the last clipboard entry (most recent)
-    pub fn get_last_entry(&self) -> Result<Option<ClipboardEntry>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, content, content_hash, created_at, last_copied, copy_count
-             FROM clipboard_entries
-             ORDER BY last_copied DESC
-             LIMIT 1"
-        )?;
-
-        let entry = stmt.query_row([], |row| {
-            let created_ts: i64 = row.get(3)?;
-            let last_copied_ts: i64 = row.get(4)?;
-
-            Ok(ClipboardEntry {
-                id: row.get(0)?,
-                content: row.get(1)?,
-                content_hash: row.get(2)?,
-                created_at: DateTime::<Utc>::from_timestamp(created_ts, 0)
-                    .unwrap_or_else(|| Utc::now()),
-                last_copied: DateTime::<Utc>::from_timestamp(last_copied_ts, 0)
-                    .unwrap_or_else(|| Utc::now()),
-                copy_count: row.get(5)?,
-            })
-        })
-            .optional()?;
-
-        Ok(entry)
-    }
-
-    /// Check if entry exists by content hash
-    pub fn entry_exists(&self, content_hash: &str) -> Result<bool> {
-        let mut stmt = self.conn.prepare(
-            "SELECT 1 FROM clipboard_entries WHERE content_hash = ?1 LIMIT 1"
-        )?;
-
-        let exists = stmt.exists(params![content_hash])?;
-        Ok(exists)
-    }
-
-    /// Get database path
-    pub fn path(&self) -> PathBuf {
-        // Try to get from the database connection
-        // For now, we'll store it separately in the struct if needed
-        PathBuf::new()
-    }
 }
 
 #[cfg(test)]

@@ -45,9 +45,9 @@ pub fn draw_entry_list(
     filter_text: &str,
 ) {
     let width = area.width as usize;
-    let time_width = 10; // Width reserved for time (e.g., "5m ago   ")
-    let content_start = 2; // Position where content starts (after "> ")
-    let content_max_width = width.saturating_sub(content_start + 1 + time_width); // 1 for spacing
+    let time_width = 10;
+    let content_start = 2;
+    let content_max_width = width.saturating_sub(content_start + 1 + time_width);
 
     let visible_entries: Vec<Line> = entries
         .iter()
@@ -56,7 +56,6 @@ pub fn draw_entry_list(
             let is_selected = (scroll_offset + idx) == selected_index;
             let content_preview = entry.content.replace('\n', "↵").replace('\r', "");
 
-            // Truncate content to available width
             let content_display = if content_preview.len() > content_max_width {
                 format!("{}…", &content_preview[..content_max_width.saturating_sub(1)])
             } else {
@@ -67,8 +66,6 @@ pub fn draw_entry_list(
             let selector = if is_selected { ">" } else { " " };
 
             if filter_text.is_empty() {
-                // Simple case: build plain text with proper alignment
-                // Pad content to exactly content_max_width so time aligns perfectly
                 let padded_content = if content_display.len() > content_max_width {
                     format!("{}…", &content_display[..content_max_width.saturating_sub(1)])
                 } else {
@@ -90,7 +87,6 @@ pub fn draw_entry_list(
 
                 Line::from(full_line).patch_style(color)
             } else {
-                // Build line with highlighting
                 let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
 
                 let content_lower = content_display.to_lowercase();
@@ -98,32 +94,26 @@ pub fn draw_entry_list(
 
                 let mut last_pos = 0;
                 for (match_idx, _) in content_lower.match_indices(&filter_lower) {
-                    // Add non-matching part
                     if match_idx > last_pos {
                         spans.push(Span::raw(content_display[last_pos..match_idx].to_string()));
                     }
-                    // Add highlighted matching part
                     spans.push(Span::styled(
                         content_display[match_idx..match_idx + filter_lower.len()].to_string(),
                         Style::default().bg(Color::Yellow).fg(Color::Black),
                     ));
                     last_pos = match_idx + filter_lower.len();
                 }
-                // Add remaining part
                 if last_pos < content_display.len() {
                     spans.push(Span::raw(content_display[last_pos..].to_string()));
                 }
 
-                // Calculate exact padding to make total content exactly content_max_width
-                // spans already include selector+space (2 chars) plus the highlighted content
                 let current_content_len: usize = spans.iter().map(|s| s.content.len()).sum();
-                let padding_needed = content_max_width.saturating_sub(current_content_len - 2); // subtract "> " (already in spans)
+                let padding_needed = content_max_width.saturating_sub(current_content_len - 2);
 
                 if padding_needed > 0 {
                     spans.push(Span::raw(" ".repeat(padding_needed)));
                 }
 
-                // Add time with correct styling - right-aligned in 10 chars
                 spans.push(Span::styled(
                     format!("{:>10}", date_str),
                     Style::default().fg(Color::Gray),
@@ -155,17 +145,11 @@ pub fn draw_entry_list(
     }
 }
 
-/// Helper to build a highlighted line (used for complex highlighting)
-fn build_highlighted_line(content: &str, filter_text: &str, _is_selected: bool) -> String {
-    content.to_string()
-}
-
 /// Preview panel component - simplified
 pub fn draw_preview(f: &mut Frame, area: Rect, entry: Option<&ClipboardEntry>, filter_text: &str) {
     let content = if let Some(e) = entry {
         let mut lines = vec![];
 
-        // Add timestamp header
         let timestamp = format_absolute_date(&e.created_at);
         lines.push(Line::from(Span::styled(
             format!("─ {}", timestamp),
@@ -173,30 +157,25 @@ pub fn draw_preview(f: &mut Frame, area: Rect, entry: Option<&ClipboardEntry>, f
         )));
         lines.push(Line::from(""));
 
-        // Add content with search highlighting
         for content_line in e.content.lines() {
             if filter_text.is_empty() {
                 lines.push(Line::from(content_line));
             } else {
-                // Build highlighted line
                 let mut spans = vec![];
                 let line_lower = content_line.to_lowercase();
                 let filter_lower = filter_text.to_lowercase();
 
                 let mut last_pos = 0;
                 for (match_idx, _) in line_lower.match_indices(&filter_lower) {
-                    // Add non-matching part
                     if match_idx > last_pos {
                         spans.push(Span::raw(content_line[last_pos..match_idx].to_string()));
                     }
-                    // Add highlighted matching part
                     spans.push(Span::styled(
                         content_line[match_idx..match_idx + filter_lower.len()].to_string(),
                         Style::default().bg(Color::Yellow).fg(Color::Black),
                     ));
                     last_pos = match_idx + filter_lower.len();
                 }
-                // Add remaining part
                 if last_pos < content_line.len() {
                     spans.push(Span::raw(content_line[last_pos..].to_string()));
                 }
@@ -231,23 +210,34 @@ pub fn draw_status_bar(
 ) {
     let content = if is_filtering {
         Line::from(vec![
-            Span::styled("Filter: ", Style::default().fg(Color::Yellow)),
+            Span::styled("🔍 ", Style::default().fg(Color::Cyan)),
+            Span::styled("Filter: ", Style::default().fg(Color::Yellow).bold()),
             Span::raw(filter_text),
-            Span::styled("_", Style::default().fg(Color::Gray)),
-            Span::styled("  (Enter to confirm, Esc to cancel)", Style::default().fg(Color::Gray)),
+            Span::styled("_", Style::default().fg(Color::Yellow)),
+            Span::styled("  ⏎ ", Style::default().fg(Color::Green)),
+            Span::styled("confirm", Style::default().fg(Color::Green).dim()),
+            Span::styled("  ⎋ ", Style::default().fg(Color::Red)),
+            Span::styled("cancel", Style::default().fg(Color::Red).dim()),
         ])
     } else {
         Line::from(vec![
-            Span::styled("[Enter]", Style::default().bold()),
-            Span::raw(" copy "),
-            Span::styled("[/]", Style::default().bold()),
-            Span::raw(" filter "),
-            Span::styled("[r]", Style::default().bold()),
-            Span::raw(" refresh "),
-            Span::styled("[q]", Style::default().bold()),
-            Span::raw(" quit "),
-            Span::raw(" | "),
-            Span::styled(format!("DB: {}", db_path_short), Style::default().fg(Color::Gray)),
+            Span::styled("⏎", Style::default().fg(Color::Green).bold()),
+            Span::raw(" copy  "),
+            Span::styled("─", Style::default().fg(Color::Gray)),
+            Span::raw(" "),
+            Span::styled("/", Style::default().fg(Color::Cyan).bold()),
+            Span::raw(" filter  "),
+            Span::styled("─", Style::default().fg(Color::Gray)),
+            Span::raw(" "),
+            Span::styled("r", Style::default().fg(Color::Yellow).bold()),
+            Span::raw(" refresh  "),
+            Span::styled("─", Style::default().fg(Color::Gray)),
+            Span::raw(" "),
+            Span::styled("q", Style::default().fg(Color::Magenta).bold()),
+            Span::raw(" quit  "),
+            Span::styled("┃", Style::default().fg(Color::Gray)),
+            Span::raw(" "),
+            Span::styled(format!("📂 {}", db_path_short), Style::default().fg(Color::Gray).dim()),
         ])
     };
 

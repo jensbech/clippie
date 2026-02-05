@@ -26,7 +26,6 @@ async fn run() -> Result<()> {
 
     match cli.command {
         None => {
-            // No subcommand: launch TUI
             launch_tui().await?;
         }
         Some(Commands::Setup) => {
@@ -59,7 +58,6 @@ async fn run() -> Result<()> {
 }
 
 async fn launch_tui() -> Result<()> {
-    // Check if config exists
     let config_manager = ConfigManager::new()?;
     if !config_manager.exists() {
         eprintln!("Error: Clippie not configured.");
@@ -67,7 +65,6 @@ async fn launch_tui() -> Result<()> {
         process::exit(1);
     }
 
-    // Get database path
     let db_path = config_manager.get_db_path()?;
     if !db_path.exists() {
         eprintln!("Error: Clipboard history database not found.");
@@ -76,14 +73,11 @@ async fn launch_tui() -> Result<()> {
         process::exit(1);
     }
 
-    // Open database
     let db = Database::open(&db_path)?;
 
-    // Load entries
     let entries = db.get_all_entries()?;
     let db_path_str = db_path.to_string_lossy().to_string();
 
-    // Setup terminal
     let mut stdout = std::io::stdout();
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
@@ -91,10 +85,8 @@ async fn launch_tui() -> Result<()> {
     let backend = ratatui::backend::CrosstermBackend::new(stdout);
     let terminal = ratatui::Terminal::new(backend)?;
 
-    // Run TUI
     let result = run_tui(terminal, entries, db_path_str).await;
 
-    // Cleanup terminal
     crossterm::terminal::disable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::LeaveAlternateScreen)?;
@@ -117,20 +109,17 @@ async fn run_tui(
     let mut event_handler = tui::EventHandler::new();
 
     loop {
-        // Draw
         terminal.draw(|f| {
             tui::draw(f, &app);
         })?;
 
-        // Handle events
         if let Some(event) = event_handler.next().await {
             if tui::handlers::EventHandler::handle(&event, &mut app) {
-                break; // Exit
+                break;
             }
         }
     }
 
-    // If an entry was selected, copy it to clipboard
     if let Some(content) = &app.selected_entry {
         clipboard::set_clipboard_content(content)?;
         println!("{}", content);

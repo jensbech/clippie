@@ -1,6 +1,4 @@
 use crate::db::ClipboardEntry;
-use crate::error::Result;
-use chrono::Utc;
 
 #[derive(Debug)]
 pub struct App {
@@ -169,22 +167,9 @@ impl App {
         }
     }
 
-    /// Refresh entries from database (to be called when data loads)
-    pub fn set_entries(&mut self, entries: Vec<ClipboardEntry>) {
-        self.entries = entries;
-        self.selected_index = 0;
-        self.scroll_offset = 0;
-        self.message = Some("Refreshed".to_string());
-    }
-
     /// Show a message
     pub fn show_message(&mut self, msg: impl Into<String>) {
         self.message = Some(msg.into());
-    }
-
-    /// Clear the message
-    pub fn clear_message(&mut self) {
-        self.message = None;
     }
 
     /// Update terminal dimensions

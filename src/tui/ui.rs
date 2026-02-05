@@ -6,19 +6,17 @@ pub fn draw(f: &mut Frame, app: &App) {
     let size = f.size();
 
     if size.height < 5 {
-        // Terminal too small
         let paragraph = ratatui::widgets::Paragraph::new("Terminal too small");
         f.render_widget(paragraph, size);
         return;
     }
 
-    // Split layout vertically: header | body | status
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2), // Header
-            Constraint::Min(5),    // Body (list + preview)
-            Constraint::Length(1), // Status bar
+            Constraint::Length(2),
+            Constraint::Min(5),
+            Constraint::Length(1),
         ])
         .split(size);
 
@@ -26,7 +24,6 @@ pub fn draw(f: &mut Frame, app: &App) {
     let body_area = chunks[1];
     let status_area = chunks[2];
 
-    // Draw header
     draw_header(
         f,
         header_area,
@@ -35,7 +32,6 @@ pub fn draw(f: &mut Frame, app: &App) {
         app.loading,
     );
 
-    // Split body into list and preview (50/50 with divider)
     let body_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Length(1), Constraint::Percentage(50)])
@@ -45,7 +41,6 @@ pub fn draw(f: &mut Frame, app: &App) {
     let divider_area = body_chunks[1];
     let preview_area = body_chunks[2];
 
-    // Draw list
     let visible_entries = app.get_visible_entries();
     draw_entry_list(
         f,
@@ -53,10 +48,9 @@ pub fn draw(f: &mut Frame, app: &App) {
         visible_entries,
         app.selected_index,
         app.scroll_offset,
-        &app.filter_text, // Pass filter text for live highlighting
+        &app.filter_text,
     );
 
-    // Draw divider
     let divider_lines: Vec<_> = (0..list_area.height)
         .map(|_| ratatui::text::Line::from("│"))
         .collect();
@@ -64,11 +58,9 @@ pub fn draw(f: &mut Frame, app: &App) {
         .style(Style::default().fg(Color::Gray));
     f.render_widget(divider, divider_area);
 
-    // Draw preview
     let current_entry = app.current_entry();
     draw_preview(f, preview_area, current_entry, &app.filter_text);
 
-    // Draw status bar
     draw_status_bar(
         f,
         status_area,
