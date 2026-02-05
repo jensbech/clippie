@@ -12,14 +12,7 @@
   },
   "keywords": ["clipboard", "history", "tui", "terminal", "macos"],
   "bin": {
-    "clippy": "./dist/cli.js",
-    "clippy-daemon": "./bin/clippy-daemon",
-    "clippy-install": "./bin/clippy-install",
-    "clippy-start": "./bin/clippy-start",
-    "clippy-stop": "./bin/clippy-stop",
-    "clippy-status": "./bin/clippy-status",
-    "clippy-clear": "./bin/clippy-clear",
-    "clippy-db": "./bin/clippy-db"
+    "clippy": "./dist/cli.js"
   },
   "files": ["dist/", "bin/", "README.md", "LICENSE"],
   "engines": { "node": ">=18.0.0" },

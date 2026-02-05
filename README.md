@@ -32,15 +32,17 @@ This will:
 
 Done! Everything is configured and running.
 
-## Usage
+## Commands
 
 ```bash
 clippy              # Browse clipboard history
-clippy-status       # Check daemon status
-clippy-stop         # Stop the daemon
-clippy-start        # Start the daemon
-clippy-db <path>    # Swap to a different database (or create new)
-clippy-clear --all  # Delete all history
+clippy setup        # Configure database location
+clippy start        # Start the daemon
+clippy stop         # Stop the daemon
+clippy status       # Show daemon status
+clippy db <path>    # Swap to a database (or create new)
+clippy clear        # Delete history entries
+clippy clear --all  # Delete all history
 ```
 
 ### Swap Databases
@@ -48,14 +50,19 @@ clippy-clear --all  # Delete all history
 Switch to an existing database or create a new one:
 
 ```bash
-# Use existing database
-clippy-db ~/.local/share/clippy/backup.db
-
-# Create new database
-clippy-db /tmp/test-clipboard.db
+# Use or create database
+clippy db ~/.local/share/clippy/backup.db
+clippy db /tmp/test-clipboard.db
 ```
 
 The daemon automatically restarts to use the new database.
+
+### Help
+
+```bash
+clippy -h       # Show all commands
+clippy --help   # Show help
+```
 
 ### Keyboard Shortcuts
 

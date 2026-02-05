@@ -10,8 +10,13 @@ import App from './App.jsx';
 
 const cli = meow(`
   Usage
-    $ clippy              Launch the clipboard history browser
-    $ clippy setup        Configure database location
+    $ clippy                    Launch the clipboard history browser
+    $ clippy setup              Configure database location
+    $ clippy start              Start the daemon
+    $ clippy stop               Stop the daemon
+    $ clippy status             Show daemon status
+    $ clippy db <path>          Switch to a database
+    $ clippy clear [--all]      Clear history entries
 
   Navigation
     j/k or arrows   Move up/down
@@ -24,12 +29,56 @@ const cli = meow(`
   flags: {},
 });
 
-// Handle setup command
-if (cli.input[0] === 'setup') {
+// Check for help flag
+if (process.argv.includes('-h') || process.argv.includes('--help')) {
+  console.log(cli.help);
+  process.exit(0);
+}
+
+// Helper to run shell commands
+function runCommand(cmd) {
+  try {
+    execSync(cmd, { stdio: 'inherit' });
+    process.exit(0);
+  } catch (e) {
+    process.exit(1);
+  }
+}
+
+// Get the bin directory path
+const { dirname } = await import('path');
+const { fileURLToPath } = await import('url');
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const binDir = `${currentDir}/../bin`;
+
+// Handle subcommands
+const command = cli.input[0];
+
+if (command === 'setup') {
   (async () => {
     await runSetup();
     process.exit(0);
   })();
+} else if (command === 'start') {
+  runCommand(`${binDir}/clippy-start`);
+} else if (command === 'stop') {
+  runCommand(`${binDir}/clippy-stop`);
+} else if (command === 'status') {
+  runCommand(`${binDir}/clippy-status`);
+} else if (command === 'db') {
+  if (!cli.input[1]) {
+    console.error('Error: database path required');
+    console.error('Usage: clippy db <path>');
+    process.exit(1);
+  }
+  runCommand(`${binDir}/clippy-db ${cli.input.slice(1).join(' ')}`);
+} else if (command === 'clear') {
+  runCommand(`${binDir}/clippy-clear ${cli.input.slice(1).join(' ')}`);
+} else if (command === 'install') {
+  runCommand(`${binDir}/clippy-install`);
+} else if (command) {
+  console.error(`Error: unknown command '${command}'`);
+  process.exit(1);
 } else {
   // Check if config exists
   if (!configExists()) {
