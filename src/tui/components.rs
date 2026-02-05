@@ -99,25 +99,28 @@ pub fn draw_entry_list(
                 let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
 
                 if fuzzy_result.matched {
-                    // Build spans with highlighting for matched positions
+                    // Build spans with highlighting for matched positions (character-based)
+                    let chars: Vec<char> = content_display.chars().collect();
                     let mut last_pos = 0;
+
                     for (match_start, match_len) in &fuzzy_result.match_positions {
-                        // Add unmatched text before this match
+                        // Add unmatched text before this match (character-based)
                         if *match_start > last_pos {
-                            spans.push(Span::raw(
-                                content_display[last_pos..*match_start].to_string(),
-                            ));
+                            let unmatched: String = chars[last_pos..*match_start].iter().collect();
+                            spans.push(Span::raw(unmatched));
                         }
-                        // Add matched text with highlighting
+                        // Add matched text with highlighting (character-based)
+                        let matched: String = chars[*match_start..(*match_start + match_len)].iter().collect();
                         spans.push(Span::styled(
-                            content_display[*match_start..(*match_start + match_len)].to_string(),
+                            matched,
                             Style::default().bg(Color::Yellow).fg(Color::Black),
                         ));
                         last_pos = *match_start + match_len;
                     }
-                    // Add remaining unmatched text
-                    if last_pos < content_display.len() {
-                        spans.push(Span::raw(content_display[last_pos..].to_string()));
+                    // Add remaining unmatched text (character-based)
+                    if last_pos < chars.len() {
+                        let remaining: String = chars[last_pos..].iter().collect();
+                        spans.push(Span::raw(remaining));
                     }
                 } else {
                     // No match (shouldn't happen if filter is applied correctly, but be safe)
