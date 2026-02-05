@@ -52,6 +52,12 @@ async fn run() -> Result<()> {
         Some(Commands::Daemon) => {
             daemon::start_daemon().await?;
         }
+        Some(Commands::Pause) => {
+            cmd_pause().await?;
+        }
+        Some(Commands::Resume) => {
+            cmd_resume().await?;
+        }
     }
 
     Ok(())
@@ -193,4 +199,26 @@ async fn cmd_clear(all: bool) -> Result<()> {
 
 async fn cmd_install() -> Result<()> {
     commands::run_install().await
+}
+
+async fn cmd_pause() -> Result<()> {
+    let config_manager = ConfigManager::new()?;
+    if config_manager.is_paused() {
+        println!("Clipboard monitoring is already paused.");
+    } else {
+        config_manager.set_paused(true)?;
+        println!("Clipboard monitoring paused. New items will not be saved.");
+    }
+    Ok(())
+}
+
+async fn cmd_resume() -> Result<()> {
+    let config_manager = ConfigManager::new()?;
+    if !config_manager.is_paused() {
+        println!("Clipboard monitoring is not paused.");
+    } else {
+        config_manager.set_paused(false)?;
+        println!("Clipboard monitoring resumed.");
+    }
+    Ok(())
 }

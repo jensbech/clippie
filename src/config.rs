@@ -22,6 +22,31 @@ impl ConfigManager {
             .map(|p| p.exists())
             .unwrap_or(false)
     }
+
+    /// Get the path to the pause flag file
+    pub fn get_pause_flag_path(&self) -> Result<PathBuf> {
+        let home = dirs::home_dir()
+            .ok_or(CliError::ConfigError("Could not determine home directory".to_string()))?;
+        Ok(home.join(".clippie").join("paused"))
+    }
+
+    /// Check if clipboard monitoring is paused
+    pub fn is_paused(&self) -> bool {
+        self.get_pause_flag_path()
+            .map(|p| p.exists())
+            .unwrap_or(false)
+    }
+
+    /// Set the paused state
+    pub fn set_paused(&self, paused: bool) -> Result<()> {
+        let path = self.get_pause_flag_path()?;
+        if paused {
+            std::fs::File::create(&path)?;
+        } else if path.exists() {
+            std::fs::remove_file(&path)?;
+        }
+        Ok(())
+    }
 }
 
 impl Default for ConfigManager {

@@ -45,6 +45,14 @@ pub enum Commands {
     #[command(about = "Install the launchd daemon")]
     Install,
 
+    /// Pause clipboard monitoring (stop writing new items)
+    #[command(about = "Pause clipboard monitoring")]
+    Pause,
+
+    /// Resume clipboard monitoring
+    #[command(about = "Resume clipboard monitoring")]
+    Resume,
+
     /// Run the clipboard monitoring daemon (called by launchd)
     #[command(about = "Run the daemon process", hide = true)]
     Daemon,
