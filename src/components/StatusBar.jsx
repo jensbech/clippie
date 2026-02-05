@@ -2,6 +2,13 @@ import React, { useRef } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useOnClick } from '@ink-tools/ink-mouse';
 
+const mascot = (
+  <Box flexDirection="column">
+    <Text color="cyan"> (◕</Text>
+    <Text color="cyan">  ◡)</Text>
+  </Box>
+);
+
 export default function StatusBar({ children, rightContent }) {
   const { stdout } = useStdout();
   const width = Math.max((stdout?.columns || 80) - 5, 60);
@@ -16,8 +23,8 @@ export default function StatusBar({ children, rightContent }) {
           {children}
         </Box>
         <Box>
-          {rightContent && <Box>{rightContent}</Box>}
-          <Text color="cyan">📋✨</Text>
+          {rightContent && <Box marginRight={1}>{rightContent}</Box>}
+          {mascot}
         </Box>
       </Box>
     </Box>
