@@ -104,6 +104,14 @@ export async function runSetup() {
         console.log('\nInstalling daemon...');
         execSync(`${scriptDir}/clippy-install`, { stdio: 'inherit' });
 
+        // Stop any existing daemon to ensure clean restart
+        console.log('Stopping existing daemon...');
+        try {
+          execSync(`${scriptDir}/clippy-stop`, { stdio: 'ignore' });
+        } catch (e) {
+          // Ignore errors if daemon isn't running
+        }
+
         console.log('\nStarting daemon...');
         execSync(`${scriptDir}/clippy-start`, { stdio: 'inherit' });
 
