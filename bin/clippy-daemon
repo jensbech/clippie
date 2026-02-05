@@ -31,8 +31,15 @@ POLL_INTERVAL=1
 init_db() {
     local db_dir
     db_dir=$(dirname "$DB_PATH")
-    mkdir -p "$db_dir"
-    sqlite3 "$DB_PATH" <<'SQL'
+
+    # Create directory if needed
+    if ! mkdir -p "$db_dir" 2>/dev/null; then
+        echo "ERROR: Failed to create database directory: $db_dir" >&2
+        exit 1
+    fi
+
+    # Create database with error checking
+    if ! sqlite3 "$DB_PATH" <<'SQL' 2>/dev/null; then
 CREATE TABLE IF NOT EXISTS clipboard_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content TEXT NOT NULL,
@@ -44,7 +51,15 @@ CREATE TABLE IF NOT EXISTS clipboard_history (
 CREATE INDEX IF NOT EXISTS idx_content_hash ON clipboard_history(content_hash);
 CREATE INDEX IF NOT EXISTS idx_last_copied ON clipboard_history(last_copied DESC);
 SQL
-    chmod 600 "$DB_PATH"
+        echo "ERROR: Failed to initialize database at $DB_PATH" >&2
+        exit 1
+    fi
+
+    # Set permissions
+    if ! chmod 600 "$DB_PATH" 2>/dev/null; then
+        echo "ERROR: Failed to set database permissions" >&2
+        exit 1
+    fi
 }
 
 # Main monitoring loop
