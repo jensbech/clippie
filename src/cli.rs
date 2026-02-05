@@ -33,13 +33,6 @@ pub enum Commands {
     #[command(about = "Show daemon status")]
     Status,
 
-    /// Switch to a different database
-    #[command(about = "Switch to a different database")]
-    Db {
-        /// Path to the new database file
-        path: String,
-    },
-
     /// Clear clipboard history
     #[command(about = "Clear clipboard history")]
     Clear {

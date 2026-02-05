@@ -40,9 +40,6 @@ async fn run() -> Result<()> {
         Some(Commands::Status) => {
             cmd_status().await?;
         }
-        Some(Commands::Db { path }) => {
-            cmd_db(path).await?;
-        }
         Some(Commands::Clear { all }) => {
             cmd_clear(all).await?;
         }
@@ -188,10 +185,6 @@ async fn cmd_stop() -> Result<()> {
 
 async fn cmd_status() -> Result<()> {
     commands::run_status().await
-}
-
-async fn cmd_db(path: String) -> Result<()> {
-    commands::run_db(path).await
 }
 
 async fn cmd_clear(all: bool) -> Result<()> {

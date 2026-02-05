@@ -1,99 +1,27 @@
 use crate::error::{CliError, Result};
-use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    pub db_path: String,
-}
-
-pub struct ConfigManager {
-    config_dir: PathBuf,
-    config_file: PathBuf,
-}
+pub struct ConfigManager;
 
 impl ConfigManager {
-    /// Initialize config manager with standard XDG paths
+    /// Initialize config manager
     pub fn new() -> Result<Self> {
-        let config_dir = if let Ok(path) = std::env::var("XDG_CONFIG_HOME") {
-            PathBuf::from(path).join("clippy")
-        } else {
-            let home = dirs::home_dir().ok_or(CliError::ConfigError(
-                "Could not determine home directory".to_string(),
-            ))?;
-            home.join(".config").join("clippy")
-        };
-
-        let config_file = config_dir.join("config.json");
-
-        Ok(ConfigManager {
-            config_dir,
-            config_file,
-        })
+        Ok(ConfigManager)
     }
 
-    /// Get the configuration file path
-    pub fn config_file(&self) -> &Path {
-        &self.config_file
-    }
-
-    /// Load configuration from file
-    pub fn load(&self) -> Result<Config> {
-        if !self.config_file.exists() {
-            return Err(CliError::ConfigNotFound);
-        }
-
-        let content = fs::read_to_string(&self.config_file)
-            .map_err(|e| CliError::ConfigError(format!("Failed to read config: {}", e)))?;
-
-        serde_json::from_str(&content)
-            .map_err(|e| CliError::ConfigError(format!("Failed to parse config: {}", e)))
-    }
-
-    /// Save configuration to file
-    pub fn save(&self, config: &Config) -> Result<()> {
-        // Create config directory if it doesn't exist
-        fs::create_dir_all(&self.config_dir).map_err(|e| {
-            CliError::ConfigError(format!("Failed to create config directory: {}", e))
-        })?;
-
-        let content = serde_json::to_string_pretty(config)
-            .map_err(|e| CliError::ConfigError(format!("Failed to serialize config: {}", e)))?;
-
-        fs::write(&self.config_file, content).map_err(|e| {
-            CliError::ConfigError(format!("Failed to write config: {}", e))
-        })?;
-
-        Ok(())
-    }
-
-    /// Check if configuration exists
-    pub fn exists(&self) -> bool {
-        self.config_file.exists()
-    }
-
-    /// Get database path with priority:
-    /// 1. CLIPPY_DB_PATH environment variable
-    /// 2. Value from config file
-    /// 3. Default location
+    /// Get default database path: ~/.clippie/clipboard.db
     pub fn get_db_path(&self) -> Result<PathBuf> {
-        // Check environment variable first
-        if let Ok(path) = std::env::var("CLIPPIE_DB_PATH") {
-            return Ok(PathBuf::from(path));
-        }
-
-        // Load from config
-        if let Ok(config) = self.load() {
-            return Ok(PathBuf::from(&config.db_path));
-        }
-
-        // Default location: ~/.clippie/clipboard.db
         let home = dirs::home_dir()
             .ok_or(CliError::ConfigError("Could not determine home directory".to_string()))?;
         Ok(home.join(".clippie").join("clipboard.db"))
     }
 
+    /// Check if setup has been run (database exists)
+    pub fn exists(&self) -> bool {
+        self.get_db_path()
+            .map(|p| p.exists())
+            .unwrap_or(false)
+    }
 }
 
 impl Default for ConfigManager {
