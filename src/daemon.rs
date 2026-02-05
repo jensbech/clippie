@@ -5,8 +5,8 @@ use crate::error::Result;
 use std::time::Duration;
 use tokio::time::sleep;
 
-const CLIPBOARD_CHECK_INTERVAL: u64 = 1000; // 1 second in milliseconds
-const STABILITY_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+const CLIPBOARD_CHECK_INTERVAL: u64 = 500; // 500ms for faster detection
+const STABILITY_CHECK_INTERVAL: Duration = Duration::from_millis(500); // 500ms stability window
 const MIN_CONTENT_LENGTH: usize = 1; // Minimum length to record
 
 pub struct DaemonState {
@@ -28,21 +28,29 @@ impl DaemonState {
 
     /// Run the main daemon loop
     pub async fn run(&mut self) -> Result<()> {
-        println!("Clipboard monitoring daemon started");
+        eprintln!("[daemon] Clipboard monitoring daemon started");
+        eprintln!("[daemon] Initial change count: {}", self.last_change_count);
 
+        let mut check_count = 0;
         loop {
+            check_count += 1;
+
             match self.check_clipboard().await {
                 Ok(true) => {
+                    eprintln!("[daemon] Clipboard change detected! (count: {})", check_count);
                     // Content changed, check for stability
                     if let Err(e) = self.check_stability().await {
-                        eprintln!("Error checking clipboard stability: {}", e);
+                        eprintln!("[daemon] Error checking clipboard stability: {}", e);
                     }
                 }
                 Ok(false) => {
-                    // No change
+                    // No change - only log every 10 seconds
+                    if check_count % 10 == 0 {
+                        eprintln!("[daemon] No clipboard change yet... (checked {} times)", check_count);
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Error checking clipboard: {}", e);
+                    eprintln!("[daemon] Error checking clipboard: {}", e);
                 }
             }
 
@@ -65,38 +73,64 @@ impl DaemonState {
     /// Check if clipboard content is stable and record it if appropriate
     async fn check_stability(&mut self) -> Result<()> {
         // Get current content
-        if let Ok(Some(content)) = get_clipboard_content() {
-            // Skip very small or whitespace-only content
-            if content.trim().len() < MIN_CONTENT_LENGTH {
-                return Ok(());
-            }
+        match get_clipboard_content() {
+            Ok(Some(content)) => {
+                eprintln!("[daemon] Got clipboard content: {} bytes", content.len());
 
-            // Check if content is different from last recorded
-            if self.last_content.as_ref() != Some(&content) {
-                self.last_content = Some(content.clone());
+                // Skip very small or whitespace-only content
+                if content.trim().len() < MIN_CONTENT_LENGTH {
+                    eprintln!("[daemon] Content too small, skipping");
+                    return Ok(());
+                }
 
-                // Wait for stability window
-                sleep(STABILITY_CHECK_INTERVAL).await;
+                // Check if content is different from last recorded
+                if self.last_content.as_ref() != Some(&content) {
+                    eprintln!("[daemon] New content detected, waiting for stability...");
+                    self.last_content = Some(content.clone());
 
-                // Check if content is still the same
-                if let Ok(Some(new_content)) = get_clipboard_content() {
-                    if new_content == content {
-                        // Content is stable, record it
-                        let hash = hash_content(&content);
-                        match self.db.insert_entry(&content, &hash) {
-                            Ok(id) => {
-                                println!("Recorded clipboard entry (ID: {})", id);
-                            }
-                            Err(e) => {
-                                eprintln!("Error recording clipboard entry: {}", e);
+                    // Wait for stability window
+                    sleep(STABILITY_CHECK_INTERVAL).await;
+
+                    // Check if content is still the same
+                    match get_clipboard_content() {
+                        Ok(Some(new_content)) => {
+                            if new_content == content {
+                                eprintln!("[daemon] Content is stable, recording...");
+                                // Content is stable, record it
+                                let hash = hash_content(&content);
+                                match self.db.insert_entry(&content, &hash) {
+                                    Ok(id) => {
+                                        eprintln!("[daemon] ✓ Recorded clipboard entry (ID: {})", id);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("[daemon] Error recording clipboard entry: {}", e);
+                                    }
+                                }
+                            } else {
+                                eprintln!("[daemon] Content changed during stability check, discarding");
                             }
                         }
+                        Ok(None) => {
+                            eprintln!("[daemon] Clipboard cleared during stability check");
+                        }
+                        Err(e) => {
+                            eprintln!("[daemon] Error getting content during stability check: {}", e);
+                        }
                     }
+                } else {
+                    eprintln!("[daemon] Content is same as last, skipping");
                 }
+                Ok(())
+            }
+            Ok(None) => {
+                eprintln!("[daemon] Clipboard is empty or not text");
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("[daemon] Error getting clipboard content: {}", e);
+                Ok(())
             }
         }
-
-        Ok(())
     }
 }
 

@@ -1,89 +1,68 @@
 use crate::error::{CliError, Result};
-use objc2::rc::autoreleasepool;
-use objc2::{class, msg_send, sel};
-use objc2_foundation::NSString;
 use sha2::{Sha256, Digest};
+use std::process::Command;
 
 /// Get the current clipboard content as a string
 pub fn get_clipboard_content() -> Result<Option<String>> {
-    unsafe {
-        autoreleasepool(|pool| {
-            // Get the general pasteboard
-            let pasteboard: *const objc2::runtime::AnyObject = msg_send![
-                class!(NSPasteboard),
-                generalPasteboard
-            ];
+    let output = Command::new("pbpaste")
+        .output()
+        .map_err(|e| CliError::ClipboardError(format!("pbpaste error: {}", e)))?;
 
-            if pasteboard.is_null() {
-                return Ok(None);
-            }
+    if !output.status.success() {
+        return Ok(None);
+    }
 
-            // Try to get string content using legacy method
-            let string_type_ns = NSString::from_str("NSStringPboardType");
-            let string_obj: *const NSString = msg_send![
-                pasteboard,
-                stringForType: &*string_type_ns
-            ];
+    let content = String::from_utf8_lossy(&output.stdout).to_string();
 
-            if !string_obj.is_null() {
-                let content = NSString::as_str(&*string_obj, pool).to_string();
-                return Ok(Some(content));
-            }
-
-            Ok(None)
-        })
+    if content.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(content))
     }
 }
 
-/// Get the current clipboard change count (for efficient change detection)
+/// Get the current clipboard change count (using file modification time as a proxy)
 pub fn get_clipboard_change_count() -> Result<i64> {
-    unsafe {
-        autoreleasepool(|_pool| {
-            let pasteboard: *const objc2::runtime::AnyObject = msg_send![
-                class!(NSPasteboard),
-                generalPasteboard
-            ];
-
-            if pasteboard.is_null() {
-                return Ok(0);
-            }
-
-            let count: i64 = msg_send![pasteboard, changeCount];
-            Ok(count)
-        })
+    // Since we can't easily track clipboard changes without GUI frameworks,
+    // we'll use the hash of the current content as our "change count"
+    // In practice, this still works because we compare hashes in the daemon
+    match get_clipboard_content() {
+        Ok(Some(content)) => {
+            let hash = hash_content(&content);
+            // Convert hash to i64 for change count (use first 16 chars)
+            Ok(i64::from_str_radix(&hash[..16], 16).unwrap_or(0))
+        }
+        Ok(None) => Ok(0),
+        Err(_) => Ok(0),
     }
 }
 
 /// Copy content to clipboard
 pub fn set_clipboard_content(content: &str) -> Result<()> {
-    unsafe {
-        autoreleasepool(|_pool| {
-            let pasteboard: *const objc2::runtime::AnyObject = msg_send![
-                class!(NSPasteboard),
-                generalPasteboard
-            ];
+    let mut child = Command::new("pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| CliError::ClipboardError(format!("Failed to run pbcopy: {}", e)))?;
 
-            if pasteboard.is_null() {
-                return Err(CliError::ClipboardError("Failed to get pasteboard".to_string()));
-            }
+    {
+        use std::io::Write;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| CliError::ClipboardError("Failed to open stdin".to_string()))?;
+        stdin
+            .write_all(content.as_bytes())
+            .map_err(|e| CliError::ClipboardError(format!("Failed to write to pbcopy: {}", e)))?;
+    }
 
-            let _: () = msg_send![pasteboard, clearContents];
+    let status = child
+        .wait()
+        .map_err(|e| CliError::ClipboardError(format!("pbcopy error: {}", e)))?;
 
-            let string = NSString::from_str(content);
-            let string_type = NSString::from_str("NSStringPboardType");
-
-            let success: bool = msg_send![
-                pasteboard,
-                setString: &*string
-                forType: &*string_type
-            ];
-
-            if success {
-                Ok(())
-            } else {
-                Err(CliError::ClipboardError("Failed to set clipboard content".to_string()))
-            }
-        })
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CliError::ClipboardError("pbcopy failed".to_string()))
     }
 }
 
