@@ -107,8 +107,9 @@ export async function runSetup() {
         console.log('\nStarting daemon...');
         execSync(`${scriptDir}/clippy-start`, { stdio: 'inherit' });
 
-        // Small delay for daemon to initialize
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Wait for daemon to initialize and create database
+        console.log('Initializing database...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
 
         console.log('\nDaemon status:');
         execSync(`${scriptDir}/clippy-status`, { stdio: 'inherit' });
