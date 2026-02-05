@@ -21,20 +21,30 @@ pub fn get_clipboard_content() -> Result<Option<String>> {
     }
 }
 
-/// Get the current clipboard change count (using file modification time as a proxy)
-pub fn get_clipboard_change_count() -> Result<i64> {
-    // Since we can't easily track clipboard changes without GUI frameworks,
-    // we'll use the hash of the current content as our "change count"
-    // In practice, this still works because we compare hashes in the daemon
-    match get_clipboard_content() {
-        Ok(Some(content)) => {
-            let hash = hash_content(&content);
-            // Convert hash to i64 for change count (use first 16 chars)
-            Ok(i64::from_str_radix(&hash[..16], 16).unwrap_or(0))
+/// Get native macOS pasteboard change count for reliable change detection
+pub fn get_pasteboard_change_count() -> i64 {
+    use objc2::{msg_send, runtime::AnyClass};
+    use objc2::runtime::AnyObject;
+
+    unsafe {
+        let Some(pasteboard_class) = AnyClass::get("NSPasteboard") else {
+            return 0;
+        };
+
+        let pasteboard: *mut AnyObject = msg_send![pasteboard_class, generalPasteboard];
+
+        if pasteboard.is_null() {
+            return 0;
         }
-        Ok(None) => Ok(0),
-        Err(_) => Ok(0),
+
+        let change_count: i64 = msg_send![pasteboard, changeCount];
+        change_count
     }
+}
+
+/// Get the current clipboard change count (using pasteboard API)
+pub fn get_clipboard_change_count() -> Result<i64> {
+    Ok(get_pasteboard_change_count())
 }
 
 /// Copy content to clipboard

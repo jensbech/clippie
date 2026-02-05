@@ -1,4 +1,4 @@
-use crate::clipboard::{get_clipboard_change_count, get_clipboard_content, hash_content};
+use crate::clipboard::{get_clipboard_content, hash_content};
 use crate::config::ConfigManager;
 use crate::db::Database;
 use crate::error::Result;
@@ -11,18 +11,14 @@ const MIN_CONTENT_LENGTH: usize = 1;
 
 pub struct DaemonState {
     db: Database,
-    last_change_count: i64,
-    last_content: Option<String>,
+    last_content_hash: Option<String>,
 }
 
 impl DaemonState {
     pub fn new(db: Database) -> Result<Self> {
-        let last_change_count = get_clipboard_change_count().unwrap_or(0);
-
         Ok(DaemonState {
             db,
-            last_change_count,
-            last_content: None,
+            last_content_hash: None,
         })
     }
 
@@ -47,14 +43,17 @@ impl DaemonState {
     }
 
     async fn check_clipboard(&mut self) -> Result<bool> {
-        let change_count = get_clipboard_change_count()?;
-
-        if change_count != self.last_change_count {
-            self.last_change_count = change_count;
-            return Ok(true);
+        match get_clipboard_content()? {
+            Some(content) => {
+                let hash = hash_content(&content);
+                if self.last_content_hash.as_ref() != Some(&hash) {
+                    self.last_content_hash = Some(hash);
+                    return Ok(true);
+                }
+                Ok(false)
+            }
+            None => Ok(false),
         }
-
-        Ok(false)
     }
 
     async fn check_stability(&mut self) -> Result<()> {
@@ -64,21 +63,17 @@ impl DaemonState {
                     return Ok(());
                 }
 
-                if self.last_content.as_ref() != Some(&content) {
-                    self.last_content = Some(content.clone());
+                sleep(STABILITY_CHECK_INTERVAL).await;
 
-                    sleep(STABILITY_CHECK_INTERVAL).await;
-
-                    match get_clipboard_content() {
-                        Ok(Some(new_content)) => {
-                            if new_content == content {
-                                let hash = hash_content(&content);
-                                let _ = self.db.insert_entry(&content, &hash);
-                            }
+                match get_clipboard_content() {
+                    Ok(Some(new_content)) => {
+                        if new_content == content {
+                            let hash = hash_content(&content);
+                            let _ = self.db.insert_entry(&content, &hash);
                         }
-                        Ok(None) => {}
-                        Err(_) => {}
                     }
+                    Ok(None) => {}
+                    Err(_) => {}
                 }
                 Ok(())
             }
