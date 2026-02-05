@@ -160,8 +160,9 @@ pub fn draw_entry_list(
     }
 }
 
-/// Preview panel component - simplified
+/// Preview panel component - with text wrapping
 pub fn draw_preview(f: &mut Frame, area: Rect, entry: Option<&ClipboardEntry>, filter_text: &str) {
+    let width = area.width as usize;
     let content = if let Some(e) = entry {
         let mut lines = vec![];
 
@@ -173,32 +174,37 @@ pub fn draw_preview(f: &mut Frame, area: Rect, entry: Option<&ClipboardEntry>, f
         lines.push(Line::from(""));
 
         for content_line in e.content.lines() {
-            if filter_text.is_empty() {
-                lines.push(Line::from(content_line));
-            } else {
-                let mut spans = vec![];
-                let line_lower = content_line.to_lowercase();
-                let filter_lower = filter_text.to_lowercase();
+            // Wrap long lines based on available width
+            let wrapped_lines = wrap_text(content_line, width);
 
-                let mut last_pos = 0;
-                for (match_idx, _) in line_lower.match_indices(&filter_lower) {
-                    if match_idx > last_pos {
-                        spans.push(Span::raw(content_line[last_pos..match_idx].to_string()));
-                    }
-                    spans.push(Span::styled(
-                        content_line[match_idx..match_idx + filter_lower.len()].to_string(),
-                        Style::default().bg(Color::Yellow).fg(Color::Black),
-                    ));
-                    last_pos = match_idx + filter_lower.len();
-                }
-                if last_pos < content_line.len() {
-                    spans.push(Span::raw(content_line[last_pos..].to_string()));
-                }
-
-                if spans.is_empty() {
-                    lines.push(Line::from(content_line));
+            for wrapped_line in wrapped_lines {
+                if filter_text.is_empty() {
+                    lines.push(Line::from(wrapped_line));
                 } else {
-                    lines.push(Line::from(spans));
+                    let mut spans = vec![];
+                    let line_lower = wrapped_line.to_lowercase();
+                    let filter_lower = filter_text.to_lowercase();
+
+                    let mut last_pos = 0;
+                    for (match_idx, _) in line_lower.match_indices(&filter_lower) {
+                        if match_idx > last_pos {
+                            spans.push(Span::raw(wrapped_line[last_pos..match_idx].to_string()));
+                        }
+                        spans.push(Span::styled(
+                            wrapped_line[match_idx..match_idx + filter_lower.len()].to_string(),
+                            Style::default().bg(Color::Yellow).fg(Color::Black),
+                        ));
+                        last_pos = match_idx + filter_lower.len();
+                    }
+                    if last_pos < wrapped_line.len() {
+                        spans.push(Span::raw(wrapped_line[last_pos..].to_string()));
+                    }
+
+                    if spans.is_empty() {
+                        lines.push(Line::from(wrapped_line));
+                    } else {
+                        lines.push(Line::from(spans));
+                    }
                 }
             }
         }
@@ -213,6 +219,42 @@ pub fn draw_preview(f: &mut Frame, area: Rect, entry: Option<&ClipboardEntry>, f
 
     let paragraph = Paragraph::new(content);
     f.render_widget(paragraph, area);
+}
+
+/// Wrap text to fit within a given width (character-based)
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
+    if width == 0 || text.is_empty() {
+        return vec![text.to_string()];
+    }
+
+    let mut lines = vec![];
+    let mut current_line = String::new();
+
+    for word in text.split_whitespace() {
+        if current_line.is_empty() {
+            // First word on line
+            if word.chars().count() > width {
+                // Word is longer than width, just put it on its own line
+                lines.push(word.to_string());
+            } else {
+                current_line = word.to_string();
+            }
+        } else if (current_line.chars().count() + 1 + word.chars().count()) <= width {
+            // Word fits on current line
+            current_line.push(' ');
+            current_line.push_str(word);
+        } else {
+            // Word doesn't fit, start new line
+            lines.push(current_line);
+            current_line = word.to_string();
+        }
+    }
+
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    lines
 }
 
 /// Status bar component
