@@ -10,12 +10,25 @@
     "type": "git",
     "url": "https://git.bechsor.no/jens/clippie"
   },
-  "keywords": ["clipboard", "history", "tui", "terminal", "macos"],
+  "keywords": [
+    "clipboard",
+    "history",
+    "tui",
+    "terminal",
+    "macos"
+  ],
   "bin": {
     "clippie": "./dist/cli.js"
   },
-  "files": ["dist/", "bin/", "README.md", "LICENSE"],
-  "engines": { "node": ">=18.0.0" },
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "esbuild src/cli.jsx --bundle --platform=node --packages=external --format=esm --outdir=dist --jsx=automatic --out-extension:.js=.js --banner:js='#!/usr/bin/env node' && chmod +x dist/cli.js",
     "start": "pnpm build && node dist/cli.js",
@@ -24,6 +37,7 @@
   "dependencies": {
     "@ink-tools/ink-mouse": "^2.1.0",
     "better-sqlite3": "^11.0.0",
+    "clippie": "link:",
     "ink": "^6.6.0",
     "meow": "^13.2.0",
     "react": "^19.2.4",
@@ -33,6 +47,9 @@
     "esbuild": "^0.27.2"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
   }
 }
