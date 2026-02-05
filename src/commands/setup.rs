@@ -23,33 +23,72 @@ pub async fn run_setup() -> Result<()> {
         }
     }
 
-    // Ask for database path
+    // Ask for database path with validation
     println!("\nWhere would you like to store the clipboard history?");
-    println!("Default: ~/.local/share/clippy/clipboard.db\n");
+    println!("Default: ~/.clippie/clipboard.db\n");
 
     let default_db_path = {
         let home = dirs::home_dir().unwrap_or_default();
-        home.join(".local").join("share").join("clippy").join("clipboard.db")
+        home.join(".clippie").join("clipboard.db")
     };
 
-    print!("Database path [{} ]: ", default_db_path.display());
-    io::stdout().flush()?;
+    let db_path = loop {
+        print!("Database path [{} ]: ", default_db_path.display());
+        io::stdout().flush()?;
 
-    let mut db_path = String::new();
-    io::stdin().read_line(&mut db_path)?;
-    let db_path = db_path.trim();
+        let mut db_path_input = String::new();
+        io::stdin().read_line(&mut db_path_input)?;
+        let db_path_input = db_path_input.trim();
 
-    let db_path = if db_path.is_empty() {
-        default_db_path
-    } else {
-        let p = PathBuf::from(db_path);
-        if p.is_absolute() {
-            p
+        let db_path = if db_path_input.is_empty() {
+            default_db_path.clone()
         } else {
-            // Relative paths are relative to home
-            let home = dirs::home_dir().unwrap_or_default();
-            home.join(p)
+            let p = PathBuf::from(db_path_input);
+            if p.is_absolute() {
+                p
+            } else {
+                // Relative paths are relative to home
+                let home = dirs::home_dir().unwrap_or_default();
+                home.join(p)
+            }
+        };
+
+        // Validate path
+        if let Some(parent) = db_path.parent() {
+            if parent.as_os_str().is_empty() {
+                println!("✗ Invalid path. Please provide a valid database path.");
+                continue;
+            }
+        } else {
+            println!("✗ Invalid path. Please provide a valid database path.");
+            continue;
         }
+
+        // Check if database already exists
+        if db_path.exists() {
+            println!("\n⚠️  Database already exists at: {}", db_path.display());
+            print!("Use existing database or create new? [use/new]: ");
+            io::stdout().flush()?;
+
+            let mut response = String::new();
+            io::stdin().read_line(&mut response)?;
+            let response = response.trim().to_lowercase();
+
+            if response == "use" || response == "u" {
+                println!("✓ Using existing database");
+                break db_path;
+            } else if response == "new" || response == "n" {
+                println!("Creating new database at: {}", db_path.display());
+                // Delete and recreate
+                std::fs::remove_file(&db_path)?;
+                break db_path;
+            } else {
+                println!("Invalid response. Please enter 'use' or 'new'.");
+                continue;
+            }
+        }
+
+        break db_path;
     };
 
     // Create database directory if it doesn't exist

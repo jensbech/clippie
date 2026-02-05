@@ -79,7 +79,7 @@ impl ConfigManager {
     /// 3. Default location
     pub fn get_db_path(&self) -> Result<PathBuf> {
         // Check environment variable first
-        if let Ok(path) = std::env::var("CLIPPY_DB_PATH") {
+        if let Ok(path) = std::env::var("CLIPPIE_DB_PATH") {
             return Ok(PathBuf::from(path));
         }
 
@@ -88,10 +88,10 @@ impl ConfigManager {
             return Ok(PathBuf::from(&config.db_path));
         }
 
-        // Default location: ~/.local/share/clippy/clipboard.db
+        // Default location: ~/.clippie/clipboard.db
         let home = dirs::home_dir()
             .ok_or(CliError::ConfigError("Could not determine home directory".to_string()))?;
-        Ok(home.join(".local").join("share").join("clippy").join("clipboard.db"))
+        Ok(home.join(".clippie").join("clipboard.db"))
     }
 
 }

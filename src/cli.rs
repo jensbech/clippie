@@ -51,6 +51,10 @@ pub enum Commands {
     /// Install the launchd daemon
     #[command(about = "Install the launchd daemon")]
     Install,
+
+    /// Run the clipboard monitoring daemon (called by launchd)
+    #[command(about = "Run the daemon process", hide = true)]
+    Daemon,
 }
 
 impl Cli {

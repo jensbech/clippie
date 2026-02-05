@@ -52,6 +52,9 @@ async fn run() -> Result<()> {
         Some(Commands::Tui) => {
             launch_tui().await?;
         }
+        Some(Commands::Daemon) => {
+            daemon::start_daemon().await?;
+        }
     }
 
     Ok(())
@@ -134,7 +137,31 @@ async fn cmd_setup() -> Result<()> {
 }
 
 async fn cmd_start() -> Result<()> {
-    daemon::start_daemon().await?;
+    use std::process::Command;
+
+    println!("\nStarting the clipboard daemon...\n");
+
+    let plist_path = dirs::home_dir()
+        .unwrap_or_default()
+        .join("Library/LaunchAgents/no.bechsor.clippie-daemon.plist");
+
+    if !plist_path.exists() {
+        eprintln!("Error: Daemon not installed. Run 'clippie setup' and choose to install the daemon.");
+        return Ok(());
+    }
+
+    let output = Command::new("launchctl")
+        .args(&["load", "-F"])
+        .arg(&plist_path)
+        .output()?;
+
+    if output.status.success() {
+        println!("✓ Daemon started\n");
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Failed to start daemon: {}", stderr);
+    }
+
     Ok(())
 }
 

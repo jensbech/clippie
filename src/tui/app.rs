@@ -178,14 +178,9 @@ impl App {
         self.terminal_height = height;
     }
 
-    /// Get the short database path for display
+    /// Get the database path for display
     pub fn get_db_path_short(&self) -> String {
-        let parts: Vec<&str> = self.db_path.split('/').collect();
-        if parts.len() >= 2 {
-            format!("{}/{}", parts[parts.len() - 2], parts[parts.len() - 1])
-        } else {
-            self.db_path.clone()
-        }
+        self.db_path.clone()
     }
 }
 

@@ -10,13 +10,17 @@ pub async fn run_install() -> Result<()> {
     })?;
 
     let plist_dir = home.join("Library/LaunchAgents");
-    let plist_path = plist_dir.join("no.bechsor.clippy-daemon.plist");
+    let plist_path = plist_dir.join("no.bechsor.clippie-daemon.plist");
 
     // Create LaunchAgents directory if needed
     fs::create_dir_all(&plist_dir)?;
 
     // Get the path to the clippie binary
     let binary_path = std::env::current_exe()?;
+
+    // Create log directory
+    let log_dir = home.join(".clippie");
+    fs::create_dir_all(&log_dir)?;
 
     // Create plist content
     let plist_content = format!(
@@ -25,11 +29,11 @@ pub async fn run_install() -> Result<()> {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>no.bechsor.clippy-daemon</string>
+    <string>no.bechsor.clippie-daemon</string>
     <key>ProgramArguments</key>
     <array>
         <string>{}</string>
-        <string>start</string>
+        <string>daemon</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -42,8 +46,8 @@ pub async fn run_install() -> Result<()> {
 </dict>
 </plist>"#,
         binary_path.display(),
-        home.join(".local/share/clippy/daemon.log").display(),
-        home.join(".local/share/clippy/daemon.err").display()
+        log_dir.join("daemon.log").display(),
+        log_dir.join("daemon.err").display()
     );
 
     // Write plist file
