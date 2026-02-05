@@ -1,6 +1,7 @@
 import readline from 'readline';
 import { mkdirSync, existsSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
+import { homedir } from 'os';
 import { getConfigPath, getDefaultDbPath, saveConfig, ensureConfigDir } from '../lib/config.js';
 
 function createInterface() {
@@ -37,11 +38,25 @@ export async function runSetup() {
   let dbPath = defaultPath;
   if (useDefault.toLowerCase() === 'n') {
     while (true) {
-      dbPath = await question(rl, 'Enter full path to clipboard database (e.g., /Users/jens/clippy.db): ');
-      if (dbPath.startsWith('/')) {
+      const userInput = await question(rl, 'Enter path to clipboard database (absolute or relative to home): ');
+
+      // Convert relative paths to absolute (relative to home directory)
+      if (userInput.startsWith('~/')) {
+        dbPath = resolve(homedir(), userInput.slice(2));
+      } else if (userInput.startsWith('/')) {
+        dbPath = userInput;
+      } else {
+        // Treat as relative to home directory
+        dbPath = resolve(homedir(), userInput);
+      }
+
+      console.log(`\nUsing database path: ${dbPath}`);
+      const confirm = await question(rl, 'Is this correct? [Y/n] ');
+
+      if (confirm.toLowerCase() !== 'n') {
         break;
       }
-      console.log('Error: Path must be absolute (start with /) and point to a file, not a directory');
+      console.log('Please try again.\n');
     }
   }
 
