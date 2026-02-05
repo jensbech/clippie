@@ -3,18 +3,23 @@ import { mkdirSync, existsSync } from 'fs';
 import { dirname } from 'path';
 import { getConfigPath, getDefaultDbPath, saveConfig, ensureConfigDir } from '../lib/config.js';
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+function createInterface() {
+  return readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: process.stdin.isTTY,
+  });
+}
 
-function question(prompt) {
+function question(rl, prompt) {
   return new Promise(resolve => {
     rl.question(prompt, resolve);
   });
 }
 
 export async function runSetup() {
+  const rl = createInterface();
+
   console.log('\n╔════════════════════════════════════════╗');
   console.log('║        Clippy Setup Wizard             ║');
   console.log('╚════════════════════════════════════════╝\n');
@@ -27,11 +32,11 @@ export async function runSetup() {
 
   console.log(`Configuration file will be saved to: ${configPath}\n`);
 
-  const useDefault = await question(`Use default database location (${defaultPath})? [Y/n] `);
+  const useDefault = await question(rl, `Use default database location (${defaultPath})? [Y/n] `);
 
   let dbPath = defaultPath;
   if (useDefault.toLowerCase() === 'n') {
-    dbPath = await question('Enter full path to clipboard database: ');
+    dbPath = await question(rl, 'Enter full path to clipboard database: ');
   }
 
   // Ensure database directory exists
@@ -66,7 +71,7 @@ export async function runSetup() {
 
   // Optional: Ask about daemon installation on macOS
   if (process.platform === 'darwin') {
-    const installDaemon = await question('Install and start the clipboard monitoring daemon? [Y/n] ');
+    const installDaemon = await question(rl, 'Install and start the clipboard monitoring daemon? [Y/n] ');
     if (installDaemon.toLowerCase() !== 'n') {
       console.log('\nNext steps:');
       console.log('  1. Run: clippy-install');

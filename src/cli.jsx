@@ -26,8 +26,11 @@ const cli = meow(`
 
 // Handle setup command
 if (cli.input[0] === 'setup') {
-  await runSetup();
-  process.exit(0);
+  (async () => {
+    await runSetup();
+    process.exit(0);
+  })();
+  process.exit();
 }
 
 // Check if config exists
