@@ -68,14 +68,17 @@ pub fn draw_entry_list(
 
             if filter_text.is_empty() {
                 // Simple case: build plain text with proper alignment
-                let content_len = content_display.len();
-                let padding_len = content_max_width.saturating_sub(content_len);
+                // Pad content to exactly content_max_width so time aligns perfectly
+                let padded_content = if content_display.len() > content_max_width {
+                    format!("{}…", &content_display[..content_max_width.saturating_sub(1)])
+                } else {
+                    format!("{:width$}", content_display, width = content_max_width)
+                };
 
                 let full_line = format!(
-                    "{} {}{}{}",
+                    "{} {}{}",
                     selector,
-                    content_display,
-                    " ".repeat(padding_len),
+                    padded_content,
                     format!("{:>10}", date_str)
                 );
 
@@ -111,16 +114,16 @@ pub fn draw_entry_list(
                     spans.push(Span::raw(content_display[last_pos..].to_string()));
                 }
 
-                // Calculate exact padding needed
-                // Total spans content length (excluding the selector which is already added)
-                let spans_len: usize = spans.iter().map(|s| s.content.len()).sum();
-                let padding_needed = content_max_width.saturating_sub(spans_len - 2); // -2 for "> "
+                // Calculate exact padding to make total content exactly content_max_width
+                // spans already include selector+space (2 chars) plus the highlighted content
+                let current_content_len: usize = spans.iter().map(|s| s.content.len()).sum();
+                let padding_needed = content_max_width.saturating_sub(current_content_len - 2); // subtract "> " (already in spans)
 
                 if padding_needed > 0 {
                     spans.push(Span::raw(" ".repeat(padding_needed)));
                 }
 
-                // Add time with correct styling
+                // Add time with correct styling - right-aligned in 10 chars
                 spans.push(Span::styled(
                     format!("{:>10}", date_str),
                     Style::default().fg(Color::Gray),
