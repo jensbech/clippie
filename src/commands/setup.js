@@ -37,11 +37,11 @@ export async function runSetup() {
   let dbPath = defaultPath;
   if (useDefault.toLowerCase() === 'n') {
     while (true) {
-      dbPath = await question(rl, 'Enter full path to clipboard database: ');
+      dbPath = await question(rl, 'Enter full path to clipboard database (e.g., /Users/jens/clippy.db): ');
       if (dbPath.startsWith('/')) {
         break;
       }
-      console.log('Error: Path must be an absolute path (start with /)');
+      console.log('Error: Path must be absolute (start with /) and point to a file, not a directory');
     }
   }
 
