@@ -5,3 +5,16 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.env
+.env.local
