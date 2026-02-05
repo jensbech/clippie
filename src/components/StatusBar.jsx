@@ -15,7 +15,10 @@ export default function StatusBar({ children, rightContent }) {
         <Box>
           {children}
         </Box>
-        {rightContent && <Box>{rightContent}</Box>}
+        <Box>
+          {rightContent && <Box>{rightContent}</Box>}
+          <Text color="cyan">📋✨</Text>
+        </Box>
       </Box>
     </Box>
   );
