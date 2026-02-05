@@ -30,54 +30,53 @@ if (cli.input[0] === 'setup') {
     await runSetup();
     process.exit(0);
   })();
-  process.exit();
-}
-
-// Check if config exists
-if (!configExists()) {
-  console.error("Error: Clippy not configured.");
-  console.error("Run 'clippy setup' to configure the database location.");
-  process.exit(1);
-}
-
-if (!dbExists()) {
-  console.error("Error: Clipboard history database not found.");
-  console.error("Make sure the daemon is running: clippy-start");
-  console.error("Or configure a valid database location: clippy setup");
-  process.exit(1);
-}
-
-// Alternate screen buffer
-process.stdout.write('\x1B[?1049h');
-process.stdout.write('\x1B[H');
-
-const restoreScreen = () => {
-  process.stdout.write('\x1B[?1049l');
-};
-process.on('SIGINT', () => { restoreScreen(); process.exit(0); });
-process.on('SIGTERM', () => { restoreScreen(); process.exit(0); });
-
-let selectedContent = null;
-
-const instance = render(
-  React.createElement(MouseProvider, { cacheInvalidationMs: 0 },
-    React.createElement(App, {
-      onSelect: (content) => {
-        selectedContent = content;
-        try {
-          execSync('pbcopy', { input: content });
-        } catch (e) {
-          // pbcopy not available
-        }
-      },
-    })
-  )
-);
-
-instance.waitUntilExit().then(() => {
-  closeDb();
-  restoreScreen();
-  if (selectedContent) {
-    process.stdout.write(selectedContent + '\n');
+} else {
+  // Check if config exists
+  if (!configExists()) {
+    console.error("Error: Clippy not configured.");
+    console.error("Run 'clippy setup' to configure the database location.");
+    process.exit(1);
   }
-});
+
+  if (!dbExists()) {
+    console.error("Error: Clipboard history database not found.");
+    console.error("Make sure the daemon is running: clippy-start");
+    console.error("Or configure a valid database location: clippy setup");
+    process.exit(1);
+  }
+
+  // Alternate screen buffer
+  process.stdout.write('\x1B[?1049h');
+  process.stdout.write('\x1B[H');
+
+  const restoreScreen = () => {
+    process.stdout.write('\x1B[?1049l');
+  };
+  process.on('SIGINT', () => { restoreScreen(); process.exit(0); });
+  process.on('SIGTERM', () => { restoreScreen(); process.exit(0); });
+
+  let selectedContent = null;
+
+  const instance = render(
+    React.createElement(MouseProvider, { cacheInvalidationMs: 0 },
+      React.createElement(App, {
+        onSelect: (content) => {
+          selectedContent = content;
+          try {
+            execSync('pbcopy', { input: content });
+          } catch (e) {
+            // pbcopy not available
+          }
+        },
+      })
+    )
+  );
+
+  instance.waitUntilExit().then(() => {
+    closeDb();
+    restoreScreen();
+    if (selectedContent) {
+      process.stdout.write(selectedContent + '\n');
+    }
+  });
+}
