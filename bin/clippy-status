@@ -38,12 +38,13 @@ if launchctl list 2>/dev/null | grep -q clippy-daemon; then
 
     # Check database
     db_path=$(get_db_path)
+    echo "Database: $db_path"
     if [[ -f "$db_path" ]]; then
         count=$(sqlite3 "$db_path" "SELECT COUNT(*) FROM clipboard_history;" 2>/dev/null || echo "0")
         size=$(du -h "$db_path" | awk '{print $1}')
-        echo "Database: $count entries ($size)"
+        echo "  Entries: $count ($size)"
     else
-        echo "Database: Not initialized"
+        echo "  Status: Not initialized"
     fi
 
     # Show recent log
