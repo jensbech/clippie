@@ -13,10 +13,9 @@ clippie setup
 
 ```bash
 clippie              # Browse clipboard history (fuzzy search with /)
-clippie setup        # Configure database location
+clippie setup        # Install and configure daemon
 clippie start/stop   # Start/stop the daemon
 clippie status       # Show daemon status
-clippie db <path>    # Switch database
 clippie clear        # Delete old entries
 ```
 
@@ -39,9 +38,8 @@ clippie clear        # Delete old entries
 - 💾 SQLite database
 - 🎨 Clean TUI with keyboard navigation
 
-## Configuration
+## Locations
 
-- Config: `~/.config/clippie/config.json`
 - Database: `~/.clippie/clipboard.db`
 - Logs: `~/.clippie/daemon.log` and `daemon.err`
 
