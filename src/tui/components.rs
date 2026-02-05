@@ -71,13 +71,8 @@ pub fn draw_entry_list(
             let selector = if is_selected { ">" } else { " " };
 
             if filter_text.is_empty() {
-                let truncated_if_needed = if content_display.len() > content_max_width {
-                    format!("{}…", &content_display[..content_max_width.saturating_sub(1)])
-                } else {
-                    content_display
-                };
-
-                let padded_content = format!("{:width$}", truncated_if_needed, width = content_max_width);
+                // content_display is already truncated above, just pad it
+                let padded_content = format!("{:width$}", content_display, width = content_max_width);
 
                 let full_line = format!(
                     "{} {}{}",
