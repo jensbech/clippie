@@ -57,8 +57,12 @@ pub fn draw_entry_list(
             let is_selected = (scroll_offset + idx) == selected_index;
             let content_preview = entry.content.replace('\n', "↵").replace('\r', "");
 
-            let content_display = if content_preview.len() > content_max_width {
-                format!("{}…", &content_preview[..content_max_width.saturating_sub(1)])
+            let content_display = if content_preview.chars().count() > content_max_width {
+                let truncated: String = content_preview
+                    .chars()
+                    .take(content_max_width.saturating_sub(1))
+                    .collect();
+                format!("{}…", truncated)
             } else {
                 content_preview
             };
