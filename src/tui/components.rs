@@ -45,8 +45,9 @@ pub fn draw_entry_list(
     filter_text: &str,
 ) {
     let width = area.width as usize;
-    let time_width = 12; // Width for time column on the right
-    let content_width = width.saturating_sub(3 + time_width); // 3 for selector and spacing
+    let time_width = 10; // Width reserved for time (e.g., "5m ago   ")
+    let content_start = 2; // Position where content starts (after "> ")
+    let content_max_width = width.saturating_sub(content_start + 1 + time_width); // 1 for spacing
 
     let visible_entries: Vec<Line> = entries
         .iter()
@@ -56,51 +57,20 @@ pub fn draw_entry_list(
             let content_preview = entry.content.replace('\n', "↵").replace('\r', "");
 
             // Truncate content to available width
-            let content_display = if content_preview.len() > content_width {
-                format!("{}…", &content_preview[..content_width.saturating_sub(1)])
+            let content_display = if content_preview.len() > content_max_width {
+                format!("{}…", &content_preview[..content_max_width.saturating_sub(1)])
             } else {
                 content_preview
             };
 
             let date_str = format_relative_date(&entry.last_copied);
-
             let selector = if is_selected { ">" } else { " " };
 
-            // Build the line with proper spacing and highlighting
-            let mut line_text = format!("{} ", selector);
-
             if filter_text.is_empty() {
-                line_text.push_str(&content_display);
-            } else {
-                // Build highlighted content
-                let content_lower = content_display.to_lowercase();
-                let filter_lower = filter_text.to_lowercase();
+                // Simple case: build plain text with proper alignment
+                let content_len = content_display.len();
+                let padding_len = content_max_width.saturating_sub(content_len);
 
-                let mut last_pos = 0;
-                let mut highlighted = String::new();
-
-                for (match_idx, _) in content_lower.match_indices(&filter_lower) {
-                    // Add non-matching part
-                    if match_idx > last_pos {
-                        highlighted.push_str(&content_display[last_pos..match_idx]);
-                    }
-                    // Mark highlighted part with markers (will be styled separately)
-                    highlighted.push('█'); // Visual marker for highlight start
-                    highlighted.push_str(&content_display[match_idx..match_idx + filter_lower.len()]);
-                    highlighted.push('█'); // Visual marker for highlight end
-                    last_pos = match_idx + filter_lower.len();
-                }
-                // Add remaining part
-                if last_pos < content_display.len() {
-                    highlighted.push_str(&content_display[last_pos..]);
-                }
-
-                line_text = format!("{} {}", selector, build_highlighted_line(&content_display, filter_text, is_selected));
-            }
-
-            if filter_text.is_empty() {
-                // Simple case without filtering
-                let padding_len: usize = content_width.saturating_sub(content_display.len() + 2);
                 let full_line = format!(
                     "{} {}{}{}",
                     selector,
@@ -141,14 +111,16 @@ pub fn draw_entry_list(
                     spans.push(Span::raw(content_display[last_pos..].to_string()));
                 }
 
-                // Add padding
-                let current_len: usize = spans.iter().map(|s| s.content.len()).sum::<usize>() + 1;
-                let padding_needed = content_width.saturating_sub(current_len);
+                // Calculate exact padding needed
+                // Total spans content length (excluding the selector which is already added)
+                let spans_len: usize = spans.iter().map(|s| s.content.len()).sum();
+                let padding_needed = content_max_width.saturating_sub(spans_len - 2); // -2 for "> "
+
                 if padding_needed > 0 {
                     spans.push(Span::raw(" ".repeat(padding_needed)));
                 }
 
-                // Add time
+                // Add time with correct styling
                 spans.push(Span::styled(
                     format!("{:>10}", date_str),
                     Style::default().fg(Color::Gray),
