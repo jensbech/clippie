@@ -1,0 +1,10 @@
+#!/bin/bash
+# Stop Clippy daemon
+set -euo pipefail
+
+PLIST="$HOME/Library/LaunchAgents/clippy-daemon.plist"
+
+launchctl stop clippy-daemon 2>/dev/null || true
+launchctl unload "$PLIST" 2>/dev/null || true
+
+echo "Clippy daemon stopped."

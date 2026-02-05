@@ -1,0 +1,19 @@
+#!/bin/bash
+# Start Clippy daemon
+set -euo pipefail
+
+PLIST="$HOME/Library/LaunchAgents/clippy-daemon.plist"
+
+# Check if plist exists
+if [[ ! -f "$PLIST" ]]; then
+    echo "Error: Daemon plist not found at $PLIST" >&2
+    echo "Please run clippy-install first." >&2
+    exit 1
+fi
+
+# Load the daemon
+launchctl load "$PLIST" 2>/dev/null || true
+launchctl start clippy-daemon
+
+echo "Clippy daemon started."
+echo "Logs: ~/Library/Logs/clippy-daemon.{out,err}.log"
