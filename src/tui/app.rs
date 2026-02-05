@@ -1,5 +1,5 @@
 use crate::db::{ClipboardEntry, Database};
-use std::path::Path;
+use crate::tui::fuzzy;
 
 #[derive(Debug)]
 pub struct App {
@@ -51,15 +51,39 @@ impl App {
         }
     }
 
-    /// Get filtered entries based on current filter text
+    /// Get filtered entries based on current filter text (fuzzy matching)
     pub fn filtered_entries(&self) -> Vec<&ClipboardEntry> {
         if self.filter_text.is_empty() {
             self.entries.iter().collect()
         } else {
-            self.entries
+            let mut filtered: Vec<(usize, &ClipboardEntry)> = self.entries
                 .iter()
-                .filter(|e| e.content.to_lowercase().contains(&self.filter_text.to_lowercase()))
-                .collect()
+                .enumerate()
+                .filter_map(|(idx, e)| {
+                    let result = fuzzy::fuzzy_match(&e.content, &self.filter_text);
+                    if result.matched {
+                        // Return tuple with original index and entry
+                        Some((idx, e))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Sort: exact matches first, then fuzzy matches
+            filtered.sort_by(|a, b| {
+                let a_exact = fuzzy::fuzzy_match(&a.1.content, &self.filter_text).is_exact;
+                let b_exact = fuzzy::fuzzy_match(&b.1.content, &self.filter_text).is_exact;
+
+                match (a_exact, b_exact) {
+                    (true, false) => std::cmp::Ordering::Less,
+                    (false, true) => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal,
+                }
+            });
+
+            // Return just the entries (drop the index tuples)
+            filtered.into_iter().map(|(_, e)| e).collect()
         }
     }
 

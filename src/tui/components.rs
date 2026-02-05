@@ -1,4 +1,5 @@
 use crate::db::ClipboardEntry;
+use crate::tui::fuzzy;
 use chrono::{DateTime, Local, Utc};
 use ratatui::{
     prelude::*,
@@ -89,24 +90,34 @@ pub fn draw_entry_list(
 
                 Line::from(full_line).patch_style(color)
             } else {
+                // Fuzzy match highlighting
+                let fuzzy_result = fuzzy::fuzzy_match(&content_display, filter_text);
                 let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
 
-                let content_lower = content_display.to_lowercase();
-                let filter_lower = filter_text.to_lowercase();
-
-                let mut last_pos = 0;
-                for (match_idx, _) in content_lower.match_indices(&filter_lower) {
-                    if match_idx > last_pos {
-                        spans.push(Span::raw(content_display[last_pos..match_idx].to_string()));
+                if fuzzy_result.matched {
+                    // Build spans with highlighting for matched positions
+                    let mut last_pos = 0;
+                    for (match_start, match_len) in &fuzzy_result.match_positions {
+                        // Add unmatched text before this match
+                        if *match_start > last_pos {
+                            spans.push(Span::raw(
+                                content_display[last_pos..*match_start].to_string(),
+                            ));
+                        }
+                        // Add matched text with highlighting
+                        spans.push(Span::styled(
+                            content_display[*match_start..(*match_start + match_len)].to_string(),
+                            Style::default().bg(Color::Yellow).fg(Color::Black),
+                        ));
+                        last_pos = *match_start + match_len;
                     }
-                    spans.push(Span::styled(
-                        content_display[match_idx..match_idx + filter_lower.len()].to_string(),
-                        Style::default().bg(Color::Yellow).fg(Color::Black),
-                    ));
-                    last_pos = match_idx + filter_lower.len();
-                }
-                if last_pos < content_display.len() {
-                    spans.push(Span::raw(content_display[last_pos..].to_string()));
+                    // Add remaining unmatched text
+                    if last_pos < content_display.len() {
+                        spans.push(Span::raw(content_display[last_pos..].to_string()));
+                    }
+                } else {
+                    // No match (shouldn't happen if filter is applied correctly, but be safe)
+                    spans.push(Span::raw(content_display));
                 }
 
                 let current_content_len: usize = spans.iter().map(|s| s.content.len()).sum();
