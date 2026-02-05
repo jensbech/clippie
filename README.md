@@ -38,8 +38,24 @@ Done! Everything is configured and running.
 clippy              # Browse clipboard history
 clippy-status       # Check daemon status
 clippy-stop         # Stop the daemon
+clippy-start        # Start the daemon
+clippy-db <path>    # Swap to a different database (or create new)
 clippy-clear --all  # Delete all history
 ```
+
+### Swap Databases
+
+Switch to an existing database or create a new one:
+
+```bash
+# Use existing database
+clippy-db ~/.local/share/clippy/backup.db
+
+# Create new database
+clippy-db /tmp/test-clipboard.db
+```
+
+The daemon automatically restarts to use the new database.
 
 ### Keyboard Shortcuts
 
