@@ -12,13 +12,15 @@ const MIN_CONTENT_LENGTH: usize = 1;
 pub struct DaemonState {
     db: Database,
     last_content_hash: Option<String>,
+    config_manager: ConfigManager,
 }
 
 impl DaemonState {
-    pub fn new(db: Database) -> Result<Self> {
+    pub fn new(db: Database, config_manager: ConfigManager) -> Result<Self> {
         Ok(DaemonState {
             db,
             last_content_hash: None,
+            config_manager,
         })
     }
 
@@ -68,6 +70,10 @@ impl DaemonState {
                 match get_clipboard_content() {
                     Ok(Some(new_content)) => {
                         if new_content == content {
+                            // Skip writing if paused
+                            if self.config_manager.is_paused() {
+                                return Ok(());
+                            }
                             let hash = hash_content(&content);
                             let _ = self.db.insert_entry(&content, &hash);
                         }
@@ -94,7 +100,7 @@ pub async fn start_daemon() -> Result<()> {
 
     let db_path = config_manager.get_db_path()?;
     let db = Database::open(&db_path)?;
-    let mut daemon = DaemonState::new(db)?;
+    let mut daemon = DaemonState::new(db, config_manager)?;
 
     daemon.run().await?;
 
@@ -110,7 +116,8 @@ mod tests {
     async fn test_daemon_state_creation() {
         let tmp = NamedTempFile::new().unwrap();
         let db = Database::open(tmp.path()).unwrap();
-        let state = DaemonState::new(db);
+        let config_manager = ConfigManager::new().unwrap();
+        let state = DaemonState::new(db, config_manager);
         assert!(state.is_ok());
     }
 }
