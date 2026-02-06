@@ -1,6 +1,54 @@
 use crate::db::{ClipboardEntry, Database};
 use crate::tui::fuzzy;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeleteMode {
+    /// Not in delete mode
+    None,
+    /// Selecting time period for bulk delete
+    SelectingPeriod,
+    /// Confirming bulk delete
+    ConfirmingBulk { period: DeletePeriod },
+    /// Confirming single entry delete
+    ConfirmingSingle,
+    /// Confirming "all" deletion (tracks confirmation count)
+    ConfirmingAll { confirmation_count: u8 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DeletePeriod {
+    Hour,
+    Day,
+    Week,
+    Month,
+    Year,
+    All,
+}
+
+impl DeletePeriod {
+    pub fn to_days(&self) -> Option<i64> {
+        match self {
+            Self::Hour => Some(1),
+            Self::Day => Some(1),
+            Self::Week => Some(7),
+            Self::Month => Some(30),
+            Self::Year => Some(365),
+            Self::All => None,
+        }
+    }
+
+    pub fn display(&self) -> &str {
+        match self {
+            Self::Hour => "Last Hour",
+            Self::Day => "Last Day",
+            Self::Week => "Last Week",
+            Self::Month => "Last Month",
+            Self::Year => "Last Year",
+            Self::All => "ALL ENTRIES",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct App {
     /// All clipboard entries from database
@@ -26,6 +74,10 @@ pub struct App {
     pub db_path: String,
     /// Tick counter for auto-refresh (refreshes every 50 ticks = ~5 seconds)
     tick_count: usize,
+    /// Delete mode state
+    pub delete_mode: DeleteMode,
+    /// Selected period index (for period selection popup)
+    pub delete_period_index: usize,
 }
 
 impl App {
@@ -48,6 +100,8 @@ impl App {
             terminal_height,
             db_path,
             tick_count: 0,
+            delete_mode: DeleteMode::None,
+            delete_period_index: 0,
         }
     }
 
@@ -239,6 +293,64 @@ impl App {
             self.tick_count = 0;
             let _ = self.refresh();
         }
+    }
+
+    /// Enter delete period selection mode
+    pub fn start_bulk_delete(&mut self) {
+        self.delete_mode = DeleteMode::SelectingPeriod;
+        self.delete_period_index = 0;
+    }
+
+    /// Enter single entry delete mode
+    pub fn start_single_delete(&mut self) {
+        if self.current_entry().is_some() {
+            self.delete_mode = DeleteMode::ConfirmingSingle;
+        }
+    }
+
+    /// Cancel delete mode
+    pub fn cancel_delete(&mut self) {
+        self.delete_mode = DeleteMode::None;
+        self.delete_period_index = 0;
+    }
+
+    /// Move selection up in delete period popup
+    pub fn delete_period_up(&mut self) {
+        if self.delete_period_index > 0 {
+            self.delete_period_index -= 1;
+        }
+    }
+
+    /// Move selection down in delete period popup
+    pub fn delete_period_down(&mut self) {
+        let max = 5; // 6 periods (0-5)
+        if self.delete_period_index < max {
+            self.delete_period_index += 1;
+        }
+    }
+
+    /// Select period and move to confirmation
+    pub fn confirm_delete_period(&mut self) {
+        let period = match self.delete_period_index {
+            0 => DeletePeriod::Hour,
+            1 => DeletePeriod::Day,
+            2 => DeletePeriod::Week,
+            3 => DeletePeriod::Month,
+            4 => DeletePeriod::Year,
+            5 => DeletePeriod::All,
+            _ => DeletePeriod::Day,
+        };
+
+        if period == DeletePeriod::All {
+            self.delete_mode = DeleteMode::ConfirmingAll { confirmation_count: 0 };
+        } else {
+            self.delete_mode = DeleteMode::ConfirmingBulk { period };
+        }
+    }
+
+    /// Check if currently in any delete mode
+    pub fn is_in_delete_mode(&self) -> bool {
+        self.delete_mode != DeleteMode::None
     }
 }
 

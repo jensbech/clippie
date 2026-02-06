@@ -1,5 +1,8 @@
-use super::app::App;
-use super::components::{draw_entry_list, draw_header, draw_preview, draw_status_bar};
+use super::app::{App, DeleteMode, DeletePeriod};
+use super::components::{
+    draw_entry_list, draw_header, draw_preview, draw_status_bar,
+    draw_delete_period_popup, draw_delete_confirmation_popup, draw_single_delete_confirmation_popup,
+};
 use ratatui::prelude::*;
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -68,4 +71,29 @@ pub fn draw(f: &mut Frame, app: &App) {
         &app.filter_text,
         &app.get_db_path_short(),
     );
+
+    // Render delete popups on top of everything
+    match &app.delete_mode {
+        DeleteMode::SelectingPeriod => {
+            draw_delete_period_popup(f, size, app.delete_period_index);
+        }
+        DeleteMode::ConfirmingBulk { period } => {
+            draw_delete_confirmation_popup(f, size, *period, false, 0);
+        }
+        DeleteMode::ConfirmingSingle => {
+            if let Some(entry) = app.current_entry() {
+                draw_single_delete_confirmation_popup(f, size, entry);
+            }
+        }
+        DeleteMode::ConfirmingAll { confirmation_count } => {
+            draw_delete_confirmation_popup(
+                f,
+                size,
+                DeletePeriod::All,
+                true,
+                *confirmation_count
+            );
+        }
+        DeleteMode::None => {}
+    }
 }

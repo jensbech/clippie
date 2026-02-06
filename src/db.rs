@@ -5,6 +5,7 @@ use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct ClipboardEntry {
+    pub id: i64,
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub last_copied: DateTime<Utc>,
@@ -64,17 +65,18 @@ impl Database {
     /// Get all clipboard entries ordered by last_copied (newest first)
     pub fn get_all_entries(&self) -> Result<Vec<ClipboardEntry>> {
         let mut stmt = self.conn.prepare(
-            "SELECT content, created_at, last_copied
+            "SELECT id, content, created_at, last_copied
              FROM clipboard_entries
              ORDER BY last_copied DESC"
         )?;
 
         let entries = stmt.query_map([], |row| {
-            let created_ts: i64 = row.get(1)?;
-            let last_copied_ts: i64 = row.get(2)?;
+            let created_ts: i64 = row.get(2)?;
+            let last_copied_ts: i64 = row.get(3)?;
 
             Ok(ClipboardEntry {
-                content: row.get(0)?,
+                id: row.get(0)?,
+                content: row.get(1)?,
                 created_at: DateTime::<Utc>::from_timestamp(created_ts, 0)
                     .unwrap_or_else(|| Utc::now()),
                 last_copied: DateTime::<Utc>::from_timestamp(last_copied_ts, 0)
@@ -151,6 +153,40 @@ impl Database {
         )?;
         let size: u64 = stmt.query_row([], |row| row.get(0))?;
         Ok(size)
+    }
+
+    /// Delete a single entry by ID
+    pub fn delete_entry_by_id(&self, id: i64) -> Result<bool> {
+        let rows_deleted = self.conn.execute(
+            "DELETE FROM clipboard_entries WHERE id = ?1",
+            params![id],
+        )?;
+
+        Ok(rows_deleted > 0)
+    }
+
+    /// Delete entries from the last N hours
+    pub fn delete_entries_from_last_hours(&self, hours: i64) -> Result<i64> {
+        let cutoff_timestamp = (Utc::now().timestamp() - (hours * 3600)) as i64;
+
+        let rows_deleted = self.conn.execute(
+            "DELETE FROM clipboard_entries WHERE last_copied >= ?1",
+            params![cutoff_timestamp],
+        )?;
+
+        Ok(rows_deleted as i64)
+    }
+
+    /// Delete entries from the last N days
+    pub fn delete_entries_from_last_days(&self, days: i64) -> Result<i64> {
+        let cutoff_timestamp = (Utc::now().timestamp() - (days * 86400)) as i64;
+
+        let rows_deleted = self.conn.execute(
+            "DELETE FROM clipboard_entries WHERE last_copied >= ?1",
+            params![cutoff_timestamp],
+        )?;
+
+        Ok(rows_deleted as i64)
     }
 
 }
