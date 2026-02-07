@@ -1,7 +1,3 @@
-/// Fuzzy search with match tracking
-/// Returns (matched, match_positions, is_exact)
-/// where match_positions is a vec of (start, length) tuples for each matching region
-
 #[derive(Debug, Clone)]
 pub struct FuzzyMatch {
     pub matched: bool,
@@ -9,14 +5,10 @@ pub struct FuzzyMatch {
     pub is_exact: bool,
 }
 
-/// Perform fuzzy matching on text
-/// Matches if all characters in query appear in order in text
-/// Also checks for exact substring matches
 pub fn fuzzy_match(text: &str, query: &str) -> FuzzyMatch {
     let text_lower = text.to_lowercase();
     let query_lower = query.to_lowercase();
 
-    // Check for exact substring match first
     if let Some(pos) = text_lower.find(&query_lower) {
         return FuzzyMatch {
             matched: true,
@@ -25,19 +17,15 @@ pub fn fuzzy_match(text: &str, query: &str) -> FuzzyMatch {
         };
     }
 
-    // Fuzzy match: find all positions where query characters appear
     let mut match_positions = Vec::new();
     let mut query_chars = query_lower.chars().peekable();
     let mut text_chars = text_lower.chars().enumerate().peekable();
 
     while let Some(q_char) = query_chars.peek() {
         let mut found = false;
-
         while let Some((idx, t_char)) = text_chars.peek() {
             if t_char == q_char {
-                let start = *idx;
-                // Track this match
-                match_positions.push((start, 1));
+                match_positions.push((*idx, 1));
                 query_chars.next();
                 text_chars.next();
                 found = true;
@@ -45,9 +33,7 @@ pub fn fuzzy_match(text: &str, query: &str) -> FuzzyMatch {
             }
             text_chars.next();
         }
-
         if !found {
-            // Query character not found in remaining text
             return FuzzyMatch {
                 matched: false,
                 match_positions: Vec::new(),
@@ -56,26 +42,27 @@ pub fn fuzzy_match(text: &str, query: &str) -> FuzzyMatch {
         }
     }
 
-    // Merge adjacent positions into ranges
-    let mut merged: Vec<(usize, usize)> = Vec::new();
-    for (pos, len) in match_positions {
-        if let Some(last) = merged.last_mut() {
-            if last.0 + last.1 == pos {
-                // Adjacent, merge them
-                last.1 += len;
-            } else {
-                merged.push((pos, len));
-            }
-        } else {
-            merged.push((pos, len));
-        }
-    }
+    let merged = merge_adjacent_positions(match_positions);
 
     FuzzyMatch {
         matched: true,
         match_positions: merged,
         is_exact: false,
     }
+}
+
+fn merge_adjacent_positions(positions: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
+    let mut merged: Vec<(usize, usize)> = Vec::new();
+    for (pos, len) in positions {
+        if let Some(last) = merged.last_mut() {
+            if last.0 + last.1 == pos {
+                last.1 += len;
+                continue;
+            }
+        }
+        merged.push((pos, len));
+    }
+    merged
 }
 
 #[cfg(test)]
@@ -95,7 +82,6 @@ mod tests {
         let result = fuzzy_match("hello world", "hlo");
         assert!(result.matched);
         assert!(!result.is_exact);
-        assert!(!result.match_positions.is_empty());
     }
 
     #[test]

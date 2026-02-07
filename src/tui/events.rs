@@ -9,13 +9,10 @@ use tokio::sync::mpsc;
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    /// Terminal tick event
     Tick,
-    /// Key press event
     Key(KeyEvent),
-    /// Mouse event
+    #[allow(dead_code)]
     Mouse(MouseEvent),
-    /// Terminal resize event
     Resize(u16, u16),
 }
 
@@ -30,37 +27,27 @@ impl EventHandler {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
         let stop = Arc::new(AtomicBool::new(false));
-
         let stop_clone = Arc::clone(&stop);
         let tx_clone = tx.clone();
 
         thread::spawn(move || {
-            loop {
-                if stop_clone.load(Ordering::Relaxed) {
-                    break;
-                }
-
+            while !stop_clone.load(Ordering::Relaxed) {
                 if event::poll(Duration::from_millis(100)).unwrap_or(false) {
                     if let Ok(event) = event::read() {
-                        match event {
-                            CrosstermEvent::Key(key) => {
-                                let _ = tx_clone.send(Event::Key(key));
-                            }
-                            CrosstermEvent::Mouse(mouse) => {
-                                let _ = tx_clone.send(Event::Mouse(mouse));
-                            }
-                            CrosstermEvent::Resize(w, h) => {
-                                let _ = tx_clone.send(Event::Resize(w, h));
-                            }
-                            _ => {}
+                        let msg = match event {
+                            CrosstermEvent::Key(key) => Some(Event::Key(key)),
+                            CrosstermEvent::Mouse(mouse) => Some(Event::Mouse(mouse)),
+                            CrosstermEvent::Resize(w, h) => Some(Event::Resize(w, h)),
+                            _ => None,
+                        };
+                        if let Some(e) = msg {
+                            let _ = tx_clone.send(e);
                         }
                     }
                 }
-
-                if stop_clone.load(Ordering::Relaxed) {
-                    break;
+                if !stop_clone.load(Ordering::Relaxed) {
+                    let _ = tx_clone.send(Event::Tick);
                 }
-                let _ = tx_clone.send(Event::Tick);
             }
         });
 

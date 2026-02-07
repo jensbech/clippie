@@ -51,28 +51,18 @@ impl DeletePeriod {
 
 #[derive(Debug)]
 pub struct App {
-    /// All clipboard entries from database
     pub entries: Vec<ClipboardEntry>,
-    /// Currently selected entry index (in filtered list)
     pub selected_index: usize,
-    /// Scroll offset (in filtered list)
     pub scroll_offset: usize,
-    /// Filter text for searching
     pub filter_text: String,
-    /// Whether currently filtering
     pub is_filtering: bool,
-    /// Temporary message to display
     pub message: Option<String>,
-    /// Whether data is still loading
     pub loading: bool,
-    /// Selected entry to return (on exit)
     pub selected_entry: Option<String>,
-    /// Terminal dimensions
     pub terminal_width: usize,
     pub terminal_height: usize,
-    /// Database path (for display)
     pub db_path: String,
-    /// Tick counter for auto-refresh (refreshes every 50 ticks = ~5 seconds)
+    pub preview_scroll: usize,
     tick_count: usize,
     /// Delete mode state
     pub delete_mode: DeleteMode,
@@ -99,13 +89,13 @@ impl App {
             terminal_width,
             terminal_height,
             db_path,
+            preview_scroll: 0,
             tick_count: 0,
             delete_mode: DeleteMode::None,
             delete_period_index: 0,
         }
     }
 
-    /// Get filtered entries based on current filter text (fuzzy matching)
     pub fn filtered_entries(&self) -> Vec<&ClipboardEntry> {
         if self.filter_text.is_empty() {
             self.entries.iter().collect()
@@ -115,20 +105,13 @@ impl App {
                 .enumerate()
                 .filter_map(|(idx, e)| {
                     let result = fuzzy::fuzzy_match(&e.content, &self.filter_text);
-                    if result.matched {
-                        // Return tuple with original index and entry
-                        Some((idx, e))
-                    } else {
-                        None
-                    }
+                    if result.matched { Some((idx, e)) } else { None }
                 })
                 .collect();
 
-            // Sort: exact matches first, then fuzzy matches
             filtered.sort_by(|a, b| {
                 let a_exact = fuzzy::fuzzy_match(&a.1.content, &self.filter_text).is_exact;
                 let b_exact = fuzzy::fuzzy_match(&b.1.content, &self.filter_text).is_exact;
-
                 match (a_exact, b_exact) {
                     (true, false) => std::cmp::Ordering::Less,
                     (false, true) => std::cmp::Ordering::Greater,
@@ -136,32 +119,29 @@ impl App {
                 }
             });
 
-            // Return just the entries (drop the index tuples)
             filtered.into_iter().map(|(_, e)| e).collect()
         }
     }
 
-    /// Get the currently selected entry
     pub fn current_entry(&self) -> Option<&ClipboardEntry> {
-        let filtered = self.filtered_entries();
-        filtered.get(self.selected_index).copied()
+        self.filtered_entries().get(self.selected_index).copied()
     }
 
-    /// Move selection up
     pub fn select_up(&mut self) {
         if self.selected_index > 0 {
             self.selected_index -= 1;
+            self.preview_scroll = 0;
             if self.selected_index < self.scroll_offset {
                 self.scroll_offset = self.selected_index;
             }
         }
     }
 
-    /// Move selection down
     pub fn select_down(&mut self) {
         let filtered = self.filtered_entries();
         if self.selected_index < filtered.len().saturating_sub(1) {
             self.selected_index += 1;
+            self.preview_scroll = 0;
             let usable_height = self.get_list_height();
             if self.selected_index >= self.scroll_offset + usable_height {
                 self.scroll_offset = self.selected_index - usable_height + 1;
@@ -169,61 +149,51 @@ impl App {
         }
     }
 
-    /// Start filtering mode
     pub fn start_filtering(&mut self) {
         self.is_filtering = true;
         self.filter_text.clear();
-        self.selected_index = 0;
-        self.scroll_offset = 0;
+        self.reset_selection();
     }
 
-    /// Stop filtering mode
     pub fn stop_filtering(&mut self) {
         self.is_filtering = false;
         self.filter_text.clear();
-        self.selected_index = 0;
-        self.scroll_offset = 0;
+        self.reset_selection();
     }
 
-    /// Add character to filter
     pub fn filter_push(&mut self, ch: char) {
         self.filter_text.push(ch);
-        self.selected_index = 0;
-        self.scroll_offset = 0;
+        self.reset_selection();
     }
 
-    /// Remove character from filter
     pub fn filter_pop(&mut self) {
         self.filter_text.pop();
-        self.selected_index = 0;
-        self.scroll_offset = 0;
+        self.reset_selection();
     }
 
-    /// Confirm filtering
     pub fn confirm_filter(&mut self) {
         self.is_filtering = false;
     }
 
-    /// Select the current entry
+    fn reset_selection(&mut self) {
+        self.selected_index = 0;
+        self.scroll_offset = 0;
+        self.preview_scroll = 0;
+    }
+
     pub fn select_entry(&mut self) -> Option<String> {
-        let content = self.current_entry().map(|entry| entry.content.clone());
-        if let Some(ref c) = content {
-            self.selected_entry = Some(c.clone());
+        if let Some(entry) = self.current_entry() {
+            let content = entry.content.clone();
+            self.selected_entry = Some(content.clone());
+            return Some(content);
         }
-        content
+        None
     }
 
-    /// Get the height available for the list
     pub fn get_list_height(&self) -> usize {
-        // Header: 2 lines (title + separator)
-        // Status bar: 1 line
-        // Spacing: 1 line
-        // Total reserved: 4 lines
-        let reserved = 4;
-        self.terminal_height.saturating_sub(reserved)
+        self.terminal_height.saturating_sub(4)
     }
 
-    /// Get visible entries for rendering
     pub fn get_visible_entries(&self) -> Vec<&ClipboardEntry> {
         let filtered = self.filtered_entries();
         let list_height = self.get_list_height();
@@ -236,12 +206,9 @@ impl App {
         }
     }
 
-    /// Get entry count info
     pub fn get_entry_count_info(&self) -> String {
-        let filtered = self.filtered_entries();
-        let count = filtered.len();
+        let count = self.filtered_entries().len();
         let total = self.entries.len();
-
         if self.filter_text.is_empty() {
             format!("{} entries", count)
         } else {
@@ -249,35 +216,30 @@ impl App {
         }
     }
 
-    /// Show a message
     pub fn show_message(&mut self, msg: impl Into<String>) {
         self.message = Some(msg.into());
     }
 
-    /// Update terminal dimensions
     pub fn update_terminal_size(&mut self, width: usize, height: usize) {
         self.terminal_width = width;
         self.terminal_height = height;
     }
 
-    /// Get the database path for display
     pub fn get_db_path_short(&self) -> String {
         self.db_path.clone()
     }
 
-    /// Refresh entries from the database
     pub fn refresh(&mut self) -> crate::error::Result<()> {
         let db = Database::open(&self.db_path)?;
         let new_entries = db.get_all_entries()?;
 
-        // Update entries if they changed
-        if new_entries.len() != self.entries.len()
+        let changed = new_entries.len() != self.entries.len()
             || new_entries.iter().zip(&self.entries).any(|(a, b)| {
                 a.content != b.content || a.last_copied != b.last_copied
-            })
-        {
+            });
+
+        if changed {
             self.entries = new_entries;
-            // Reset selection since order may have changed
             self.selected_index = 0;
             self.scroll_offset = 0;
         }
@@ -285,51 +247,77 @@ impl App {
         Ok(())
     }
 
-    /// Handle a tick event and perform auto-refresh if needed
     pub fn on_tick(&mut self) {
         self.tick_count += 1;
-        // Auto-refresh every 50 ticks (~5 seconds at 100ms per tick)
         if self.tick_count >= 50 {
             self.tick_count = 0;
             let _ = self.refresh();
         }
     }
 
-    /// Enter delete period selection mode
+    pub fn delete_current_entry(&mut self) -> crate::error::Result<bool> {
+        if let Some(entry) = self.current_entry() {
+            let content = entry.content.clone();
+            let db = Database::open(&self.db_path)?;
+            if db.delete_entry_by_content(&content)? {
+                self.entries.retain(|e| e.content != content);
+                let filtered_len = self.filtered_entries().len();
+                if self.selected_index >= filtered_len && filtered_len > 0 {
+                    self.selected_index = filtered_len - 1;
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn scroll_preview_up(&mut self) {
+        self.preview_scroll = self.preview_scroll.saturating_sub(1);
+    }
+
+    pub fn scroll_preview_down(&mut self) {
+        self.preview_scroll = self.preview_scroll.saturating_add(1);
+    }
+
+    #[allow(dead_code)]
+    pub fn reset_preview_scroll(&mut self) {
+        self.preview_scroll = 0;
+    }
+
+    #[allow(dead_code)]
+    pub fn get_preview_height(&self) -> usize {
+        self.terminal_height.saturating_sub(4)
+    }
+
     pub fn start_bulk_delete(&mut self) {
         self.delete_mode = DeleteMode::SelectingPeriod;
         self.delete_period_index = 0;
     }
 
-    /// Enter single entry delete mode
     pub fn start_single_delete(&mut self) {
         if self.current_entry().is_some() {
             self.delete_mode = DeleteMode::ConfirmingSingle;
         }
     }
 
-    /// Cancel delete mode
     pub fn cancel_delete(&mut self) {
         self.delete_mode = DeleteMode::None;
         self.delete_period_index = 0;
     }
 
-    /// Move selection up in delete period popup
     pub fn delete_period_up(&mut self) {
         if self.delete_period_index > 0 {
             self.delete_period_index -= 1;
         }
     }
 
-    /// Move selection down in delete period popup
     pub fn delete_period_down(&mut self) {
-        let max = 5; // 6 periods (0-5)
+        let max = 5;
         if self.delete_period_index < max {
             self.delete_period_index += 1;
         }
     }
 
-    /// Select period and move to confirmation
     pub fn confirm_delete_period(&mut self) {
         let period = match self.delete_period_index {
             0 => DeletePeriod::Hour,
@@ -348,7 +336,6 @@ impl App {
         }
     }
 
-    /// Check if currently in any delete mode
     pub fn is_in_delete_mode(&self) -> bool {
         self.delete_mode != DeleteMode::None
     }
@@ -357,12 +344,23 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
+
+    fn create_test_entry(content: &str) -> ClipboardEntry {
+        ClipboardEntry {
+            id: 1,
+            content: content.to_string(),
+            created_at: Utc::now(),
+            last_copied: Utc::now(),
+        }
+    }
 
     #[test]
     fn test_app_creation() {
         let app = App::new(vec![], "/test/db".to_string(), 80, 24);
         assert_eq!(app.entries.len(), 0);
         assert_eq!(app.selected_index, 0);
+        assert_eq!(app.preview_scroll, 0);
     }
 
     #[test]
@@ -374,5 +372,89 @@ mod tests {
         assert_eq!(app.filter_text, "te");
         app.filter_pop();
         assert_eq!(app.filter_text, "t");
+    }
+
+    #[test]
+    fn test_select_up_down() {
+        let entries = vec![
+            create_test_entry("one"),
+            create_test_entry("two"),
+            create_test_entry("three"),
+        ];
+        let mut app = App::new(entries, "/test/db".to_string(), 80, 24);
+
+        assert_eq!(app.selected_index, 0);
+        app.select_down();
+        assert_eq!(app.selected_index, 1);
+        app.select_down();
+        assert_eq!(app.selected_index, 2);
+        app.select_down();
+        assert_eq!(app.selected_index, 2);
+
+        app.select_up();
+        assert_eq!(app.selected_index, 1);
+        app.select_up();
+        assert_eq!(app.selected_index, 0);
+        app.select_up();
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn test_filtering_mode() {
+        let mut app = App::new(vec![], "/test/db".to_string(), 80, 24);
+        assert!(!app.is_filtering);
+
+        app.start_filtering();
+        assert!(app.is_filtering);
+        assert!(app.filter_text.is_empty());
+
+        app.filter_push('t');
+        app.confirm_filter();
+        assert!(!app.is_filtering);
+        assert_eq!(app.filter_text, "t");
+
+        app.stop_filtering();
+        assert!(app.filter_text.is_empty());
+    }
+
+    #[test]
+    fn test_preview_scroll() {
+        let mut app = App::new(vec![], "/test/db".to_string(), 80, 24);
+        assert_eq!(app.preview_scroll, 0);
+
+        app.scroll_preview_down();
+        assert_eq!(app.preview_scroll, 1);
+        app.scroll_preview_down();
+        assert_eq!(app.preview_scroll, 2);
+
+        app.scroll_preview_up();
+        assert_eq!(app.preview_scroll, 1);
+        app.scroll_preview_up();
+        assert_eq!(app.preview_scroll, 0);
+        app.scroll_preview_up();
+        assert_eq!(app.preview_scroll, 0);
+
+        app.preview_scroll = 5;
+        app.reset_preview_scroll();
+        assert_eq!(app.preview_scroll, 0);
+    }
+
+    #[test]
+    fn test_get_list_height() {
+        let app = App::new(vec![], "/test/db".to_string(), 80, 24);
+        assert_eq!(app.get_list_height(), 20);
+    }
+
+    #[test]
+    fn test_entry_count_info() {
+        let entries = vec![
+            create_test_entry("hello"),
+            create_test_entry("world"),
+        ];
+        let mut app = App::new(entries, "/test/db".to_string(), 80, 24);
+        assert_eq!(app.get_entry_count_info(), "2 entries");
+
+        app.filter_text = "hello".to_string();
+        assert_eq!(app.get_entry_count_info(), "2 entries, 1 matches");
     }
 }

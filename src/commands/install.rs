@@ -2,6 +2,8 @@ use crate::error::Result;
 use std::fs;
 use std::process::Command;
 
+const PLIST_NAME: &str = "no.bechsor.clippie-daemon.plist";
+
 pub async fn run_install() -> Result<()> {
     println!("\n⚙️  Installing Clippie Daemon\n");
 
@@ -10,19 +12,19 @@ pub async fn run_install() -> Result<()> {
     })?;
 
     let plist_dir = home.join("Library/LaunchAgents");
-    let plist_path = plist_dir.join("no.bechsor.clippie-daemon.plist");
-
-    // Create LaunchAgents directory if needed
-    fs::create_dir_all(&plist_dir)?;
-
-    // Get the path to the clippie binary
+    let plist_path = plist_dir.join(PLIST_NAME);
     let binary_path = std::env::current_exe()?;
-
-    // Create log directory
     let log_dir = home.join(".clippie");
+
+    fs::create_dir_all(&plist_dir)?;
     fs::create_dir_all(&log_dir)?;
 
-    // Create plist content
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&log_dir, fs::Permissions::from_mode(0o700));
+    }
+
     let plist_content = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -50,14 +52,11 @@ pub async fn run_install() -> Result<()> {
         log_dir.join("daemon.err").display()
     );
 
-    // Write plist file
     fs::write(&plist_path, plist_content)?;
     println!("✓ Created LaunchAgent plist at {}", plist_path.display());
 
-    // Load the plist
     let output = Command::new("launchctl")
-        .arg("load")
-        .arg(&plist_path)
+        .args(["load", &plist_path.to_string_lossy()])
         .output()?;
 
     if output.status.success() {

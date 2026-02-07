@@ -4,16 +4,15 @@ use crate::error::Result;
 use std::io::{self, Write};
 
 pub async fn run_clear(all: bool) -> Result<()> {
-    let config_manager = ConfigManager::new()?;
+    let config = ConfigManager::new()?;
 
-    if !config_manager.exists() {
+    if !config.exists() {
         eprintln!("Error: Clippie not configured.");
         eprintln!("Run 'clippie setup' to configure the database location.");
         return Ok(());
     }
 
-    let db_path = config_manager.get_db_path()?;
-
+    let db_path = config.get_db_path()?;
     if !db_path.exists() {
         eprintln!("Error: Database not found at {}", db_path.display());
         return Ok(());
@@ -25,22 +24,19 @@ pub async fn run_clear(all: bool) -> Result<()> {
         print!("Are you sure you want to delete ALL clipboard history? This cannot be undone. [y/N]: ");
         io::stdout().flush()?;
 
-        let mut response = String::new();
+        let mut response = String::with_capacity(16);
         io::stdin().read_line(&mut response)?;
-        if !response.trim().eq_ignore_ascii_case("y") {
-            println!("Cleared cancelled.");
+        if response.len() > 100 || !response.trim().eq_ignore_ascii_case("y") {
+            println!("Cancelled.");
             return Ok(());
         }
 
         let count = db.clear_all()?;
-        println!("✓ Deleted {} clipboard entries", count);
+        println!("✓ Deleted {} clipboard entries\n", count);
     } else {
-        // Clear entries older than 30 days
         let count = db.delete_entries_older_than_days(30)?;
-        println!("✓ Deleted {} old clipboard entries", count);
+        println!("✓ Deleted {} old clipboard entries\n", count);
     }
-
-    println!();
 
     Ok(())
 }

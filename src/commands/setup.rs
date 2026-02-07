@@ -6,26 +6,22 @@ use std::io::{self, Write};
 pub async fn run_setup() -> Result<()> {
     println!("\n🔧 Clippie Setup Wizard\n");
 
-    let config_manager = ConfigManager::new()?;
-    let db_path = config_manager.get_db_path()?;
+    let config = ConfigManager::new()?;
+    let db_path = config.get_db_path()?;
 
-    // Create database directory if needed
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    // Create/verify database
     Database::open(&db_path)?;
-
     println!("✓ Database configured at {}", db_path.display());
 
-    // Ask about installing daemon
     print!("\nInstall the clipboard monitoring daemon? [y/N]: ");
     io::stdout().flush()?;
 
-    let mut response = String::new();
+    let mut response = String::with_capacity(16);
     io::stdin().read_line(&mut response)?;
-    if response.trim().eq_ignore_ascii_case("y") {
+    if response.len() <= 100 && response.trim().eq_ignore_ascii_case("y") {
         crate::commands::install::run_install().await?;
     }
 
