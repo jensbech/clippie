@@ -4,44 +4,39 @@ use std::path::PathBuf;
 pub struct ConfigManager;
 
 impl ConfigManager {
-    /// Initialize config manager
     pub fn new() -> Result<Self> {
         Ok(ConfigManager)
     }
 
-    /// Get default database path: ~/.clippie/clipboard.db
+    fn get_clippie_dir(&self) -> Result<PathBuf> {
+        let home = dirs::home_dir()
+            .ok_or(CliError::ConfigError("Could not determine home directory".to_string()))?;
+        Ok(home.join(".clippie"))
+    }
+
     pub fn get_db_path(&self) -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .ok_or(CliError::ConfigError("Could not determine home directory".to_string()))?;
-        Ok(home.join(".clippie").join("clipboard.db"))
+        Ok(self.get_clippie_dir()?.join("clipboard.db"))
     }
 
-    /// Check if setup has been run (database exists)
     pub fn exists(&self) -> bool {
-        self.get_db_path()
-            .map(|p| p.exists())
-            .unwrap_or(false)
+        self.get_db_path().map(|p| p.exists()).unwrap_or(false)
     }
 
-    /// Get the path to the pause flag file
-    pub fn get_pause_flag_path(&self) -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .ok_or(CliError::ConfigError("Could not determine home directory".to_string()))?;
-        Ok(home.join(".clippie").join("paused"))
-    }
-
-    /// Check if clipboard monitoring is paused
     pub fn is_paused(&self) -> bool {
-        self.get_pause_flag_path()
-            .map(|p| p.exists())
+        self.get_clippie_dir()
+            .map(|p| p.join("paused").exists())
             .unwrap_or(false)
     }
 
-    /// Set the paused state
     pub fn set_paused(&self, paused: bool) -> Result<()> {
-        let path = self.get_pause_flag_path()?;
+        let path = self.get_clippie_dir()?.join("paused");
         if paused {
             std::fs::File::create(&path)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
         } else if path.exists() {
             std::fs::remove_file(&path)?;
         }
@@ -61,7 +56,6 @@ mod tests {
 
     #[test]
     fn test_config_manager_creation() {
-        let cm = ConfigManager::new();
-        assert!(cm.is_ok());
+        assert!(ConfigManager::new().is_ok());
     }
 }

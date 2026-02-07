@@ -2,7 +2,7 @@ use super::app::App;
 use super::components::{draw_entry_list, draw_header, draw_preview, draw_status_bar};
 use ratatui::prelude::*;
 
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.size();
 
     if size.height < 5 {
@@ -59,7 +59,25 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_widget(divider, divider_area);
 
     let current_entry = app.current_entry();
-    draw_preview(f, preview_area, current_entry, &app.filter_text);
+    let preview_height = preview_area.height as usize;
+    let (total_lines, first_match) = draw_preview(
+        f,
+        preview_area,
+        current_entry,
+        &app.filter_text,
+        app.preview_scroll,
+    );
+
+    if let Some(match_line) = first_match {
+        if match_line >= app.preview_scroll + preview_height || match_line < app.preview_scroll {
+            app.preview_scroll = match_line.saturating_sub(preview_height / 4);
+        }
+    }
+
+    let max_scroll = total_lines.saturating_sub(preview_height);
+    if app.preview_scroll > max_scroll {
+        app.preview_scroll = max_scroll;
+    }
 
     draw_status_bar(
         f,

@@ -1,13 +1,149 @@
 use crate::db::ClipboardEntry;
 use crate::tui::fuzzy;
 use chrono::{DateTime, Local, Utc};
+use once_cell::sync::Lazy;
 use ratatui::{
     prelude::*,
     text::{Line, Span},
     widgets::{Block, Paragraph},
 };
+use regex::Regex;
 
-/// Header component
+static EMAIL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()
+});
+static URL_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"https?://[^\s<>\[\]()]+").unwrap()
+});
+static IP_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").unwrap()
+});
+static SECRET_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)(password|secret|token|api[_-]?key|auth)[=:]\s*\S+").unwrap()
+});
+static UUID_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").unwrap()
+});
+
+#[derive(Clone, Copy)]
+enum PatternType {
+    Email,
+    Url,
+    Ip,
+    Secret,
+    Uuid,
+}
+
+impl PatternType {
+    fn color(self) -> Color {
+        match self {
+            PatternType::Email => Color::Cyan,
+            PatternType::Url => Color::Blue,
+            PatternType::Ip => Color::Green,
+            PatternType::Secret => Color::Red,
+            PatternType::Uuid => Color::Magenta,
+        }
+    }
+}
+
+fn find_patterns(text: &str) -> Vec<(usize, usize, PatternType)> {
+    let patterns: &[(_, PatternType)] = &[
+        (&*EMAIL_RE, PatternType::Email),
+        (&*URL_RE, PatternType::Url),
+        (&*IP_RE, PatternType::Ip),
+        (&*SECRET_RE, PatternType::Secret),
+        (&*UUID_RE, PatternType::Uuid),
+    ];
+
+    let mut matches: Vec<_> = patterns.iter()
+        .flat_map(|(re, ptype)| re.find_iter(text).map(move |m| (m.start(), m.end(), *ptype)))
+        .collect();
+
+    matches.sort_by_key(|(start, _, _)| *start);
+
+    let mut result = vec![];
+    let mut last_end = 0;
+    for (start, end, ptype) in matches {
+        if start >= last_end {
+            result.push((start, end, ptype));
+            last_end = end;
+        }
+    }
+    result
+}
+
+fn highlight_patterns(text: &str) -> Vec<Span<'static>> {
+    let patterns = find_patterns(text);
+    if patterns.is_empty() {
+        return vec![Span::raw(text.to_string())];
+    }
+
+    let mut spans = vec![];
+    let mut last_end = 0;
+
+    for (start, end, ptype) in patterns {
+        if start > last_end {
+            spans.push(Span::raw(text[last_end..start].to_string()));
+        }
+        spans.push(Span::styled(
+            text[start..end].to_string(),
+            Style::default().fg(ptype.color()),
+        ));
+        last_end = end;
+    }
+
+    if last_end < text.len() {
+        spans.push(Span::raw(text[last_end..].to_string()));
+    }
+
+    spans
+}
+
+fn highlight_search(text: &str, query: &str) -> Vec<Span<'static>> {
+    if query.is_empty() {
+        return highlight_patterns(text);
+    }
+
+    let chars: Vec<char> = text.chars().collect();
+    let chars_lower: Vec<char> = text.to_lowercase().chars().collect();
+    let query_chars: Vec<char> = query.to_lowercase().chars().collect();
+
+    if chars_lower.len() < query_chars.len() {
+        return highlight_patterns(text);
+    }
+
+    let mut spans = vec![];
+    let mut last_end = 0;
+    let max_i = chars_lower.len() - query_chars.len();
+
+    let mut i = 0;
+    while i <= max_i {
+        if chars_lower[i..i + query_chars.len()] == query_chars[..] {
+            if i > last_end {
+                spans.push(Span::raw(chars[last_end..i].iter().collect::<String>()));
+            }
+            spans.push(Span::styled(
+                chars[i..i + query_chars.len()].iter().collect::<String>(),
+                Style::default().bg(Color::Yellow).fg(Color::Black),
+            ));
+            last_end = i + query_chars.len();
+            i = last_end;
+        } else {
+            i += 1;
+        }
+    }
+
+    if last_end < chars.len() {
+        spans.push(Span::raw(chars[last_end..].iter().collect::<String>()));
+    }
+
+    if spans.is_empty() {
+        highlight_patterns(text)
+    } else {
+        spans
+    }
+}
+
 pub fn draw_header(f: &mut Frame, area: Rect, title: &str, subtitle: &str, loading: bool) {
     let display_subtitle = if loading { "Loading..." } else { subtitle };
 
@@ -29,14 +165,10 @@ pub fn draw_header(f: &mut Frame, area: Rect, title: &str, subtitle: &str, loadi
     };
 
     let divider = "─".repeat(area.width as usize);
-
     let lines = vec![header_text, Line::from(Span::styled(divider, Style::default().fg(Color::Gray)))];
-
-    let paragraph = Paragraph::new(lines);
-    f.render_widget(paragraph, area);
+    f.render_widget(Paragraph::new(lines), area);
 }
 
-/// Entry list component with search highlighting
 pub fn draw_entry_list(
     f: &mut Frame,
     area: Rect,
@@ -46,9 +178,7 @@ pub fn draw_entry_list(
     filter_text: &str,
 ) {
     let width = area.width as usize;
-    let time_width = 10;
-    let content_start = 2;
-    let content_max_width = width.saturating_sub(content_start + 1 + time_width);
+    let content_max_width = width.saturating_sub(13);
 
     let visible_entries: Vec<Line> = entries
         .iter()
@@ -58,10 +188,7 @@ pub fn draw_entry_list(
             let content_preview = entry.content.replace('\n', "↵").replace('\r', "");
 
             let content_display = if content_preview.chars().count() > content_max_width {
-                let truncated: String = content_preview
-                    .chars()
-                    .take(content_max_width.saturating_sub(1))
-                    .collect();
+                let truncated: String = content_preview.chars().take(content_max_width.saturating_sub(1)).collect();
                 format!("{}…", truncated)
             } else {
                 content_preview
@@ -69,159 +196,133 @@ pub fn draw_entry_list(
 
             let date_str = format_relative_date(&entry.last_copied);
             let selector = if is_selected { ">" } else { " " };
+            let style = if is_selected { Style::default().fg(Color::Cyan) } else { Style::default() };
 
             if filter_text.is_empty() {
-                // content_display is already truncated above, just pad it
-                let padded_content = format!("{:width$}", content_display, width = content_max_width);
-
-                let full_line = format!(
-                    "{} {}{}",
-                    selector,
-                    padded_content,
-                    format!("{:>10}", date_str)
-                );
-
-                let color = if is_selected {
-                    Style::default().fg(Color::Cyan)
-                } else {
-                    Style::default()
-                };
-
-                Line::from(full_line).patch_style(color)
+                let full_line = format!("{} {:width$}{:>10}", selector, content_display, date_str, width = content_max_width);
+                Line::from(full_line).patch_style(style)
             } else {
-                // Fuzzy match highlighting
                 let fuzzy_result = fuzzy::fuzzy_match(&content_display, filter_text);
                 let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
 
                 if fuzzy_result.matched {
-                    // Build spans with highlighting for matched positions (character-based)
                     let chars: Vec<char> = content_display.chars().collect();
                     let mut last_pos = 0;
 
                     for (match_start, match_len) in &fuzzy_result.match_positions {
-                        // Add unmatched text before this match (character-based)
                         if *match_start > last_pos {
-                            let unmatched: String = chars[last_pos..*match_start].iter().collect();
-                            spans.push(Span::raw(unmatched));
+                            spans.push(Span::raw(chars[last_pos..*match_start].iter().collect::<String>()));
                         }
-                        // Add matched text with highlighting (character-based)
-                        let matched: String = chars[*match_start..(*match_start + match_len)].iter().collect();
                         spans.push(Span::styled(
-                            matched,
+                            chars[*match_start..(*match_start + match_len)].iter().collect::<String>(),
                             Style::default().bg(Color::Yellow).fg(Color::Black),
                         ));
                         last_pos = *match_start + match_len;
                     }
-                    // Add remaining unmatched text (character-based)
                     if last_pos < chars.len() {
-                        let remaining: String = chars[last_pos..].iter().collect();
-                        spans.push(Span::raw(remaining));
+                        spans.push(Span::raw(chars[last_pos..].iter().collect::<String>()));
                     }
                 } else {
-                    // No match (shouldn't happen if filter is applied correctly, but be safe)
                     spans.push(Span::raw(content_display));
                 }
 
-                let current_content_len: usize = spans.iter().map(|s| s.content.len()).sum();
-                let padding_needed = content_max_width.saturating_sub(current_content_len - 2);
-
-                if padding_needed > 0 {
-                    spans.push(Span::raw(" ".repeat(padding_needed)));
+                let current_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                let padding = content_max_width.saturating_sub(current_len.saturating_sub(2));
+                if padding > 0 {
+                    spans.push(Span::raw(" ".repeat(padding)));
                 }
 
-                spans.push(Span::styled(
-                    format!("{:>10}", date_str),
-                    Style::default().fg(Color::Gray),
-                ));
-
-                let color = if is_selected {
-                    Style::default().fg(Color::Cyan)
-                } else {
-                    Style::default()
-                };
-
-                Line::from(spans).patch_style(color)
+                spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(Color::Gray)));
+                Line::from(spans).patch_style(style)
             }
         })
         .collect();
 
     if visible_entries.is_empty() {
-        let message = if entries.is_empty() {
-            "No clipboard history found."
-        } else {
-            "No matches."
-        };
-
-        let paragraph = Paragraph::new(message).style(Style::default().fg(Color::Gray));
-        f.render_widget(paragraph, area);
+        let message = if entries.is_empty() { "No clipboard history found." } else { "No matches." };
+        f.render_widget(Paragraph::new(message).style(Style::default().fg(Color::Gray)), area);
     } else {
-        let paragraph = Paragraph::new(visible_entries).block(Block::default());
-        f.render_widget(paragraph, area);
+        f.render_widget(Paragraph::new(visible_entries).block(Block::default()), area);
     }
 }
 
-/// Preview panel component - with text wrapping
-pub fn draw_preview(f: &mut Frame, area: Rect, entry: Option<&ClipboardEntry>, filter_text: &str) {
-    let width = area.width as usize;
-    let content = if let Some(e) = entry {
-        let mut lines = vec![];
+pub fn draw_preview(
+    f: &mut Frame,
+    area: Rect,
+    entry: Option<&ClipboardEntry>,
+    filter_text: &str,
+    scroll_offset: usize,
+) -> (usize, Option<usize>) {
+    let width = area.width.saturating_sub(2) as usize;
+    let height = area.height as usize;
 
-        let timestamp = format_absolute_date(&e.created_at);
+    let (lines, first_match_line) = if let Some(e) = entry {
+        let mut lines = vec![];
+        let mut first_match: Option<usize> = None;
+
         lines.push(Line::from(Span::styled(
-            format!("─ {}", timestamp),
+            format!("─ {}", format_absolute_date(&e.created_at)),
             Style::default().fg(Color::Gray),
         )));
         lines.push(Line::from(""));
 
         for content_line in e.content.lines() {
-            // Wrap long lines based on available width
-            let wrapped_lines = wrap_text(content_line, width);
-
-            for wrapped_line in wrapped_lines {
-                if filter_text.is_empty() {
-                    lines.push(Line::from(wrapped_line));
+            for wrapped_line in wrap_text(content_line, width) {
+                let line = if filter_text.is_empty() {
+                    Line::from(highlight_patterns(&wrapped_line))
                 } else {
-                    let mut spans = vec![];
-                    let line_lower = wrapped_line.to_lowercase();
-                    let filter_lower = filter_text.to_lowercase();
-
-                    let mut last_pos = 0;
-                    for (match_idx, _) in line_lower.match_indices(&filter_lower) {
-                        if match_idx > last_pos {
-                            spans.push(Span::raw(wrapped_line[last_pos..match_idx].to_string()));
-                        }
-                        spans.push(Span::styled(
-                            wrapped_line[match_idx..match_idx + filter_lower.len()].to_string(),
-                            Style::default().bg(Color::Yellow).fg(Color::Black),
-                        ));
-                        last_pos = match_idx + filter_lower.len();
+                    if first_match.is_none() && wrapped_line.to_lowercase().contains(&filter_text.to_lowercase()) {
+                        first_match = Some(lines.len());
                     }
-                    if last_pos < wrapped_line.len() {
-                        spans.push(Span::raw(wrapped_line[last_pos..].to_string()));
-                    }
-
-                    if spans.is_empty() {
-                        lines.push(Line::from(wrapped_line));
-                    } else {
-                        lines.push(Line::from(spans));
-                    }
-                }
+                    Line::from(highlight_search(&wrapped_line, filter_text))
+                };
+                lines.push(line);
             }
         }
 
-        lines
+        (lines, first_match)
     } else {
-        vec![Line::from(Span::styled(
-            "No entry selected",
-            Style::default().fg(Color::Gray),
-        ))]
+        (vec![Line::from(Span::styled("No entry selected", Style::default().fg(Color::Gray)))], None)
     };
 
-    let paragraph = Paragraph::new(content);
-    f.render_widget(paragraph, area);
+    let total_lines = lines.len();
+    let visible_lines: Vec<Line> = lines.into_iter().skip(scroll_offset).take(height).collect();
+
+    let content_area = Rect { x: area.x, y: area.y, width: area.width.saturating_sub(1), height: area.height };
+    f.render_widget(Paragraph::new(visible_lines), content_area);
+
+    if total_lines > height {
+        let scrollbar_area = Rect { x: area.x + area.width.saturating_sub(1), y: area.y, width: 1, height: area.height };
+        draw_scrollbar(f, scrollbar_area, scroll_offset, total_lines, height);
+    }
+
+    (total_lines, first_match_line)
 }
 
-/// Wrap text to fit within a given width (character-based)
+fn draw_scrollbar(f: &mut Frame, area: Rect, offset: usize, total: usize, visible: usize) {
+    let height = area.height as usize;
+    if height == 0 || total <= visible {
+        return;
+    }
+
+    let thumb_height = ((visible as f64 / total as f64) * height as f64).max(1.0) as usize;
+    let max_offset = total.saturating_sub(visible);
+    let thumb_pos = if max_offset > 0 {
+        ((offset as f64 / max_offset as f64) * (height.saturating_sub(thumb_height)) as f64) as usize
+    } else {
+        0
+    };
+
+    let scrollbar_lines: Vec<Line> = (0..height)
+        .map(|i| {
+            let ch = if i >= thumb_pos && i < thumb_pos + thumb_height { "█" } else { "░" };
+            Line::from(Span::styled(ch, Style::default().fg(Color::Gray)))
+        })
+        .collect();
+
+    f.render_widget(Paragraph::new(scrollbar_lines), area);
+}
+
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if width == 0 || text.is_empty() {
         return vec![text.to_string()];
@@ -232,19 +333,15 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 
     for word in text.split_whitespace() {
         if current_line.is_empty() {
-            // First word on line
             if word.chars().count() > width {
-                // Word is longer than width, just put it on its own line
                 lines.push(word.to_string());
             } else {
                 current_line = word.to_string();
             }
         } else if (current_line.chars().count() + 1 + word.chars().count()) <= width {
-            // Word fits on current line
             current_line.push(' ');
             current_line.push_str(word);
         } else {
-            // Word doesn't fit, start new line
             lines.push(current_line);
             current_line = word.to_string();
         }
@@ -257,18 +354,10 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-/// Status bar component
-pub fn draw_status_bar(
-    f: &mut Frame,
-    area: Rect,
-    is_filtering: bool,
-    filter_text: &str,
-    db_path_short: &str,
-) {
+pub fn draw_status_bar(f: &mut Frame, area: Rect, is_filtering: bool, filter_text: &str, _db_path: &str) {
     let content = if is_filtering {
         Line::from(vec![
-            Span::styled("🔍 ", Style::default().fg(Color::Cyan)),
-            Span::styled("Filter: ", Style::default().fg(Color::Yellow).bold()),
+            Span::styled("🔍 Filter: ", Style::default().fg(Color::Yellow).bold()),
             Span::raw(filter_text),
             Span::styled("_", Style::default().fg(Color::Yellow)),
             Span::styled("  ⏎ ", Style::default().fg(Color::Green)),
@@ -279,33 +368,25 @@ pub fn draw_status_bar(
     } else {
         Line::from(vec![
             Span::styled("⏎", Style::default().fg(Color::Green).bold()),
-            Span::raw(" copy  "),
-            Span::styled("─", Style::default().fg(Color::Gray)),
-            Span::raw(" "),
+            Span::raw(" copy "),
             Span::styled("/", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" filter  "),
-            Span::styled("─", Style::default().fg(Color::Gray)),
-            Span::raw(" "),
+            Span::raw(" filter "),
+            Span::styled("d", Style::default().fg(Color::Red).bold()),
+            Span::raw(" del "),
             Span::styled("r", Style::default().fg(Color::Yellow).bold()),
-            Span::raw(" refresh  "),
-            Span::styled("─", Style::default().fg(Color::Gray)),
-            Span::raw(" "),
+            Span::raw(" refresh "),
+            Span::styled("h/l", Style::default().fg(Color::Blue).bold()),
+            Span::raw(" scroll "),
             Span::styled("q", Style::default().fg(Color::Magenta).bold()),
-            Span::raw(" quit  "),
-            Span::styled("┃", Style::default().fg(Color::Gray)),
-            Span::raw(" "),
-            Span::styled(format!("📂 {}", db_path_short), Style::default().fg(Color::Gray).dim()),
+            Span::raw(" quit"),
         ])
     };
 
-    let paragraph = Paragraph::new(content);
-    f.render_widget(paragraph, area);
+    f.render_widget(Paragraph::new(content), area);
 }
 
-/// Format relative date (e.g., "2m ago", "1h ago")
 fn format_relative_date(date: &DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let duration = now.signed_duration_since(*date);
+    let duration = Utc::now().signed_duration_since(*date);
 
     if duration.num_seconds() < 60 {
         "now".to_string()
@@ -322,10 +403,8 @@ fn format_relative_date(date: &DateTime<Utc>) -> String {
     }
 }
 
-/// Format absolute date (e.g., "January 1st at 14:30")
 fn format_absolute_date(date: &DateTime<Utc>) -> String {
-    let local = date.with_timezone(&Local);
-    local.format("%b %d at %H:%M").to_string()
+    date.with_timezone(&Local).format("%b %d at %H:%M").to_string()
 }
 
 #[cfg(test)]
@@ -334,15 +413,56 @@ mod tests {
 
     #[test]
     fn test_format_relative_date_now() {
-        let date = Utc::now();
-        let formatted = format_relative_date(&date);
-        assert_eq!(formatted, "now");
+        assert_eq!(format_relative_date(&Utc::now()), "now");
     }
 
     #[test]
     fn test_format_relative_date_minutes_ago() {
         let date = Utc::now() - chrono::Duration::minutes(5);
-        let formatted = format_relative_date(&date);
-        assert_eq!(formatted, "5m ago");
+        assert_eq!(format_relative_date(&date), "5m ago");
+    }
+
+    #[test]
+    fn test_find_patterns_email() {
+        let patterns = find_patterns("Contact: user@example.com");
+        assert_eq!(patterns.len(), 1);
+        assert!(matches!(patterns[0].2, PatternType::Email));
+    }
+
+    #[test]
+    fn test_find_patterns_url() {
+        let patterns = find_patterns("Visit https://example.com");
+        assert_eq!(patterns.len(), 1);
+        assert!(matches!(patterns[0].2, PatternType::Url));
+    }
+
+    #[test]
+    fn test_wrap_text() {
+        let wrapped = wrap_text("hello world test", 10);
+        assert_eq!(wrapped.len(), 2);
+    }
+
+    #[test]
+    fn test_highlight_search() {
+        let spans = highlight_search("Hello World", "world");
+        assert_eq!(spans.len(), 2);
+    }
+
+    #[test]
+    fn test_highlight_search_unicode() {
+        let spans = highlight_search("Héllo Wörld", "wörld");
+        assert_eq!(spans.len(), 2);
+    }
+
+    #[test]
+    fn test_highlight_search_empty_text() {
+        let spans = highlight_search("", "query");
+        assert_eq!(spans.len(), 1);
+    }
+
+    #[test]
+    fn test_highlight_search_query_longer_than_text() {
+        let spans = highlight_search("ab", "abcdef");
+        assert_eq!(spans.len(), 1);
     }
 }

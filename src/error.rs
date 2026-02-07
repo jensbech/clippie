@@ -18,6 +18,7 @@ pub enum CliError {
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 
+    #[allow(dead_code)]
     #[error("Config not found. Run 'clippie setup' to configure the database location.")]
     ConfigNotFound,
 }
