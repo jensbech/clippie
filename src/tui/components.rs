@@ -5,9 +5,11 @@ use once_cell::sync::Lazy;
 use ratatui::{
     prelude::*,
     text::{Line, Span},
-    widgets::{Block, Paragraph},
+    widgets::{Block, Borders, BorderType, Clear, Paragraph},
+    layout::{Alignment, Margin},
 };
 use regex::Regex;
+use crate::tui::app::DeletePeriod;
 
 static EMAIL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()
@@ -377,6 +379,10 @@ pub fn draw_status_bar(f: &mut Frame, area: Rect, is_filtering: bool, filter_tex
             Span::raw(" refresh "),
             Span::styled("h/l", Style::default().fg(Color::Blue).bold()),
             Span::raw(" scroll "),
+            Span::styled("x", Style::default().fg(Color::Red).bold()),
+            Span::raw(" del "),
+            Span::styled("D", Style::default().fg(Color::Red).bold()),
+            Span::raw(" bulk "),
             Span::styled("q", Style::default().fg(Color::Magenta).bold()),
             Span::raw(" quit"),
         ])
@@ -405,6 +411,229 @@ fn format_relative_date(date: &DateTime<Utc>) -> String {
 
 fn format_absolute_date(date: &DateTime<Utc>) -> String {
     date.with_timezone(&Local).format("%b %d at %H:%M").to_string()
+}
+
+/// Helper function to create a centered rect
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
+}
+
+/// Draw popup overlay for delete period selection
+pub fn draw_delete_period_popup(
+    f: &mut Frame,
+    area: Rect,
+    selected_index: usize,
+) {
+    // Center popup
+    let popup_area = centered_rect(50, 40, area);
+
+    // Clear background
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Delete History ")
+        .title_alignment(Alignment::Center)
+        .style(Style::default().bg(Color::Black).fg(Color::White));
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(block, popup_area);
+
+    // Content area (inside border)
+    let inner = popup_area.inner(&Margin { vertical: 2, horizontal: 2 });
+
+    let periods = vec![
+        ("Last Hour", "Delete entries from the past hour"),
+        ("Last Day", "Delete entries from the past 24 hours"),
+        ("Last Week", "Delete entries from the past 7 days"),
+        ("Last Month", "Delete entries from the past 30 days"),
+        ("Last Year", "Delete entries from the past 365 days"),
+        ("ALL ENTRIES", "⚠ Delete EVERYTHING (requires 3 confirmations)"),
+    ];
+
+    let mut lines = vec![
+        Line::from(Span::styled(
+            "Select time period to delete:",
+            Style::default().fg(Color::Gray)
+        )),
+        Line::from(""),
+    ];
+
+    for (idx, (label, description)) in periods.iter().enumerate() {
+        let is_selected = idx == selected_index;
+        let prefix = if is_selected { "> " } else { "  " };
+        let style = if is_selected {
+            Style::default().fg(Color::Cyan).bold()
+        } else if idx == 5 {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default()
+        };
+
+        lines.push(Line::from(Span::styled(
+            format!("{}{}", prefix, label),
+            style,
+        )));
+
+        if is_selected {
+            lines.push(Line::from(Span::styled(
+                format!("  {}", description),
+                Style::default().fg(Color::Gray).italic(),
+            )));
+        }
+
+        lines.push(Line::from(""));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("⏎ ", Style::default().fg(Color::Green)),
+        Span::raw("select  "),
+        Span::styled("⎋ ", Style::default().fg(Color::Red)),
+        Span::raw("cancel"),
+    ]));
+
+    let paragraph = Paragraph::new(lines);
+    f.render_widget(paragraph, inner);
+}
+
+/// Draw confirmation popup for bulk delete
+pub fn draw_delete_confirmation_popup(
+    f: &mut Frame,
+    area: Rect,
+    period: DeletePeriod,
+    is_all: bool,
+    confirmation_count: u8,
+) {
+    let popup_area = centered_rect(60, 30, area);
+
+    let title = if is_all {
+        format!(" CONFIRM DELETION ({}/3) ", confirmation_count + 1)
+    } else {
+        " Confirm Deletion ".to_string()
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(title)
+        .title_alignment(Alignment::Center)
+        .style(Style::default().bg(Color::Black).fg(Color::Red));
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(block, popup_area);
+
+    let inner = popup_area.inner(&Margin { vertical: 2, horizontal: 2 });
+
+    let warning_style = Style::default().fg(Color::Red).bold();
+
+    let mut lines = vec![
+        Line::from(Span::styled("⚠ WARNING", warning_style)),
+        Line::from(""),
+    ];
+
+    if is_all {
+        lines.push(Line::from(Span::styled(
+            "You are about to delete ALL clipboard history!",
+            warning_style,
+        )));
+        lines.push(Line::from(Span::styled(
+            "This action CANNOT be undone!",
+            warning_style,
+        )));
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("Confirmation {}/3", confirmation_count + 1),
+            Style::default().fg(Color::Yellow),
+        )));
+    } else {
+        lines.push(Line::from(vec![
+            Span::raw("Delete entries from: "),
+            Span::styled(period.display(), Style::default().fg(Color::Yellow).bold()),
+        ]));
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            "This action cannot be undone.",
+            Style::default().fg(Color::Gray),
+        )));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled("y", Style::default().fg(Color::Red).bold()),
+        Span::raw(" confirm  "),
+        Span::styled("n", Style::default().fg(Color::Green).bold()),
+        Span::raw(" cancel"),
+    ]));
+
+    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
+    f.render_widget(paragraph, inner);
+}
+
+/// Draw confirmation popup for single entry delete
+pub fn draw_single_delete_confirmation_popup(
+    f: &mut Frame,
+    area: Rect,
+    entry: &ClipboardEntry,
+) {
+    let popup_area = centered_rect(60, 30, area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .title(" Delete Entry ")
+        .title_alignment(Alignment::Center)
+        .style(Style::default().bg(Color::Black).fg(Color::Yellow));
+
+    f.render_widget(Clear, popup_area);
+    f.render_widget(block, popup_area);
+
+    let inner = popup_area.inner(&Margin { vertical: 2, horizontal: 2 });
+
+    let preview = if entry.content.len() > 100 {
+        format!("{}...", &entry.content[..100])
+    } else {
+        entry.content.clone()
+    }.replace('\n', "↵");
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "Delete this clipboard entry?",
+            Style::default().bold(),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            preview,
+            Style::default().fg(Color::Gray),
+        )),
+        Line::from(""),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("y", Style::default().fg(Color::Red).bold()),
+            Span::raw(" delete  "),
+            Span::styled("n", Style::default().fg(Color::Green).bold()),
+            Span::raw(" cancel"),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
+    f.render_widget(paragraph, inner);
 }
 
 #[cfg(test)]
