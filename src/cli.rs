@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "clippie",
     about = "A fast, keyboard-driven clipboard history manager for macOS",
-    version = "1.0.0"
+    version = env!("CARGO_PKG_VERSION")
 )]
 pub struct Cli {
     #[command(subcommand)]
