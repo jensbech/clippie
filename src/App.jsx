@@ -51,6 +51,7 @@ export default function App({ onSelect }) {
   const [filterText, setFilterText] = useState('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [message, setMessage] = useState(null);
+  const lastKeyRef = React.useRef({ key: '', time: 0 });
 
   // Get database path for display
   const dbPath = getDbPath();
@@ -89,6 +90,8 @@ export default function App({ onSelect }) {
     ? entries.filter(e => e.content.toLowerCase().includes(filterText.toLowerCase()))
     : entries;
 
+  const hasOverflowAbove = scrollOffset > 0;
+  const hasOverflowBelow = scrollOffset + usableHeight < filteredEntries.length;
   const visibleEntries = filteredEntries.slice(scrollOffset, scrollOffset + usableHeight);
   const currentEntry = filteredEntries[selectedIndex] || null;
 
@@ -148,6 +151,37 @@ export default function App({ onSelect }) {
         }
         return newIndex;
       });
+    } else if (input === 'G') {
+      const lastIndex = filteredEntries.length - 1;
+      setSelectedIndex(lastIndex);
+      setScrollOffset(Math.max(0, lastIndex - usableHeight + 1));
+    } else if (input === 'g') {
+      const now = Date.now();
+      if (lastKeyRef.current.key === 'g' && now - lastKeyRef.current.time < 500) {
+        setSelectedIndex(0);
+        setScrollOffset(0);
+        lastKeyRef.current = { key: '', time: 0 };
+      } else {
+        lastKeyRef.current = { key: 'g', time: now };
+      }
+    } else if (key.ctrl && input === 'd') {
+      const jump = Math.floor(usableHeight / 2);
+      setSelectedIndex(i => {
+        const newIndex = Math.min(filteredEntries.length - 1, i + jump);
+        if (newIndex >= scrollOffset + usableHeight) {
+          setScrollOffset(Math.max(0, newIndex - usableHeight + 1));
+        }
+        return newIndex;
+      });
+    } else if (key.ctrl && input === 'u') {
+      const jump = Math.floor(usableHeight / 2);
+      setSelectedIndex(i => {
+        const newIndex = Math.max(0, i - jump);
+        if (newIndex < scrollOffset) {
+          setScrollOffset(newIndex);
+        }
+        return newIndex;
+      });
     } else if (key.return) {
       if (currentEntry) {
         selectEntry(currentEntry);
@@ -165,7 +199,8 @@ export default function App({ onSelect }) {
   }, [filteredEntries, scrollOffset, selectEntry]);
 
   const filterInfo = filterText ? ` filter: "${filterText}"` : '';
-  const subtitle = `${filteredEntries.length} entries${filterInfo}`;
+  const position = filteredEntries.length > 0 ? `${selectedIndex + 1} / ${filteredEntries.length}` : '0 entries';
+  const subtitle = `${position}${filterInfo}`;
 
   return (
     <Box flexDirection="column">
@@ -174,6 +209,11 @@ export default function App({ onSelect }) {
       <Box>
         {/* Left panel: list */}
         <Box flexDirection="column" width={leftWidth} height={usableHeight} overflow="hidden" flexShrink={0} flexGrow={0}>
+          {hasOverflowAbove && (
+            <Box justifyContent="center" width={leftWidth}>
+              <Text color="gray">▲</Text>
+            </Box>
+          )}
           {filteredEntries.length === 0 ? (
             <Text color="gray">
               {entries.length === 0 ? 'No clipboard history found.' : 'No matches.'}
@@ -202,6 +242,11 @@ export default function App({ onSelect }) {
                 </ClickableRow>
               );
             })
+          )}
+          {hasOverflowBelow && (
+            <Box justifyContent="center" width={leftWidth}>
+              <Text color="gray">▼</Text>
+            </Box>
           )}
         </Box>
 
