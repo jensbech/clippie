@@ -6,15 +6,9 @@
 
 <p align="center">Fast keyboard-driven clipboard history manager for macOS.</p>
 
-## Install
+## Install: `curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash`
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash
-
-## Setup
-
-clippie setup
-```
+## Setup: `clippie setup`
 
 ## Commands
 
