@@ -6,11 +6,11 @@
 
 <p align="center">Fast keyboard-driven clipboard history manager for macOS.</p>
 
-## Install: `curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash`
+## Install
+`curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash`
 
-## Setup: `clippie setup`
-
-## Commands
+## Setup
+`clippie setup`
 
 ```bash
 clippie              # Browse clipboard history (fuzzy search with /)
