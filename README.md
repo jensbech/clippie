@@ -5,7 +5,7 @@ Fast keyboard-driven clipboard history manager for macOS.
 ## Quick Start
 
 ```bash
-curl -fsSL https://git.bechsor.no/jens/clippie/raw/branch/main/install | bash
+curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash
 clippie setup
 ```
 
