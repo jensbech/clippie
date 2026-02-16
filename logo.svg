@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Abstract paperclip body - single continuous stroke -->
+  <path d="
+    M88 30
+    C88 20, 112 20, 112 30
+    L112 150
+    C112 168, 88 168, 88 150
+    L88 60
+    C88 48, 112 48, 112 60
+    L112 130
+    C112 142, 88 142, 88 130
+    L88 80"
+    fill="none"
+    stroke="#45b075"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+  <!-- Clippy's big left eye -->
+  <circle cx="88" cy="86" r="12" fill="none" stroke="#45b075" stroke-width="4"/>
+  <circle cx="90" cy="84" r="5" fill="#45b075"/>
+  <!-- Clippy's big right eye -->
+  <circle cx="112" cy="86" r="12" fill="none" stroke="#45b075" stroke-width="4"/>
+  <circle cx="114" cy="84" r="5" fill="#45b075"/>
+  <!-- Raised eyebrows -->
+  <path d="M78 72 C82 66, 90 66, 96 70" fill="none" stroke="#45b075" stroke-width="3" stroke-linecap="round"/>
+  <path d="M104 70 C110 66, 118 66, 122 72" fill="none" stroke="#45b075" stroke-width="3" stroke-linecap="round"/>
+</svg>

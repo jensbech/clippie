@@ -1,61 +1,92 @@
 #!/bin/bash
 set -e
 
-FORGEJO_URL="https://git.bechsor.no"
-REPO="jens/clippie"
+GITHUB_REPO="jensbech/clippie"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
-echo "🚀 Installing Clippie..."
+echo "Installing clippie..."
+
+# Detect OS
+case "$(uname -s)" in
+    Darwin)  OS="apple-darwin" ;;
+    Linux)   OS="unknown-linux-musl" ;;
+    MINGW*|MSYS*|CYGWIN*)
+        OS="pc-windows-gnu"
+        ;;
+    *)
+        echo "Unsupported OS: $(uname -s)"
+        exit 1
+        ;;
+esac
+
+# Detect architecture
+case "$(uname -m)" in
+    x86_64|amd64)  ARCH="x86_64" ;;
+    aarch64|arm64)  ARCH="aarch64" ;;
+    *)
+        echo "Unsupported architecture: $(uname -m)"
+        exit 1
+        ;;
+esac
+
+TARGET="${ARCH}-${OS}"
+echo "Detected platform: $TARGET"
 
 # Create install directory
 mkdir -p "$INSTALL_DIR"
 
-# Get latest release info from Forgejo API
-echo "📡 Fetching latest release..."
-API_URL="$FORGEJO_URL/api/v1/repos/$REPO/releases/latest"
+# Get latest release info from GitHub API
+echo "Fetching latest release..."
+API_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
 RELEASE_JSON=$(curl -fsSL "$API_URL")
 
 # Extract version
-VERSION=$(echo "$RELEASE_JSON" | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4)
+VERSION=$(echo "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*' | cut -d'"' -f4)
 if [ -z "$VERSION" ]; then
-    echo "❌ Could not find latest release"
+    echo "Could not find latest release"
     exit 1
 fi
 
-echo "✓ Found version: $VERSION"
+echo "Found version: $VERSION"
 
-# Find the aarch64 binary download URL
-DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url":"[^"]*aarch64[^"]*' | cut -d'"' -f4 | head -1)
+# Find the binary download URL for this platform
+DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o "\"browser_download_url\": *\"[^\"]*${TARGET}[^\"]*" | cut -d'"' -f4 | head -1)
 
 if [ -z "$DOWNLOAD_URL" ]; then
-    echo "❌ Could not find aarch64 binary for this release"
+    echo "Could not find binary for $TARGET"
     echo "Available downloads:"
-    echo "$RELEASE_JSON" | grep -o '"browser_download_url":"[^"]*' | cut -d'"' -f4 || true
+    echo "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*' | cut -d'"' -f4 || true
     exit 1
 fi
 
-echo "📥 Downloading from: $DOWNLOAD_URL"
+echo "Downloading from: $DOWNLOAD_URL"
+
+# Determine binary name
+BINARY_NAME="clippie"
+if [ "$OS" = "pc-windows-gnu" ]; then
+    BINARY_NAME="clippie.exe"
+fi
 
 # Download and install
 TEMP_FILE=$(mktemp)
 curl -fsSL -o "$TEMP_FILE" "$DOWNLOAD_URL"
-mv "$TEMP_FILE" "$INSTALL_DIR/clippie"
-chmod +x "$INSTALL_DIR/clippie"
+mv "$TEMP_FILE" "$INSTALL_DIR/$BINARY_NAME"
+chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-echo "✓ Installed to: $INSTALL_DIR/clippie"
+echo "Installed to: $INSTALL_DIR/$BINARY_NAME"
 
 # Check if in PATH
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
-    echo "⚠️  $INSTALL_DIR is not in your PATH"
+    echo "$INSTALL_DIR is not in your PATH"
     echo "Add this to ~/.zshrc or ~/.bash_profile:"
     echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
     echo ""
     echo "Then run: source ~/.zshrc"
 else
-    echo "✓ Already in PATH"
+    echo "Already in PATH"
 fi
 
 echo ""
-echo "🎉 Installation complete!"
+echo "Installation complete!"
 echo "Run: clippie"

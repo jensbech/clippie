@@ -1,11 +1,15 @@
-# Clippie
+<p align="center">
+  <img src="logo.svg" alt="Clippie" width="120" />
+</p>
 
-Fast keyboard-driven clipboard history manager for macOS.
+<h1 align="center">Clippie</h1>
+
+<p align="center">Fast keyboard-driven clipboard history manager for macOS.</p>
 
 ## Quick Start
 
 ```bash
-curl -fsSL https://git.bechsor.no/jens/clippie/raw/branch/main/install | bash
+curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash
 clippie setup
 ```
 
