@@ -34,20 +34,35 @@ build-arm: (_run "build-arm")
 # Build for Intel macOS (x86_64)
 build-intel: (_run "build-intel")
 
-# Build for Linux x86_64 (static musl)
-build-linux-x64: (_run "build-linux-x64")
-
-# Build for Linux ARM64 (static musl)
-build-linux-arm: (_run "build-linux-arm")
-
-# Build for Windows x86_64
-build-windows: (_run "build-windows")
-
-# Build all 5 targets and create release directory
-release-all: (_run "release-all")
+# Build macOS targets and create release directory
+release-all:
+    #!/usr/bin/env bash
+    set -e
+    [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+    NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+    VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+    echo "Building macOS targets concurrently..."
+    cargo build --release --target aarch64-apple-darwin 2>&1 | sed 's/^/[arm]   /' &
+    PID1=$!
+    cargo build --release --target x86_64-apple-darwin 2>&1 | sed 's/^/[intel] /' &
+    PID2=$!
+    FAILED=0
+    wait $PID1 || FAILED=1
+    wait $PID2 || FAILED=1
+    if [ "$FAILED" -eq 1 ]; then
+        echo "Some builds failed"
+        exit 1
+    fi
+    echo "All targets built successfully"
+    mkdir -p release
+    cp "target/aarch64-apple-darwin/release/$NAME" "release/$NAME-$VERSION-aarch64-apple-darwin"
+    cp "target/x86_64-apple-darwin/release/$NAME" "release/$NAME-$VERSION-x86_64-apple-darwin"
+    echo ""
+    echo "Release binaries:"
+    ls -lh release/
 
 # Bump version, build all targets, and publish to GitHub
-release: _bump (_run "release-all") _publish
+release: _bump release-all _publish
 
 # Prompt for version bump type and update Cargo.toml
 [private]
