@@ -12,6 +12,8 @@
 ## Setup
 `clippie setup`
 
+## Usage
+
 ```bash
 clippie              # Browse clipboard history (fuzzy search with /)
 clippie setup        # Install and configure daemon
