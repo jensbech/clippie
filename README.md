@@ -1,6 +1,10 @@
-# Clippie
+<p align="center">
+  <img src="logo.svg" alt="Clippie" width="120" />
+</p>
 
-Fast keyboard-driven clipboard history manager for macOS.
+<h1 align="center">Clippie</h1>
+
+<p align="center">Fast keyboard-driven clipboard history manager for macOS.</p>
 
 ## Quick Start
 
