@@ -41,6 +41,7 @@ release-all:
     [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
     NAME=$(grep '^name' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
     VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+    rm -rf release
     echo "Building macOS targets concurrently..."
     cargo build --release --target aarch64-apple-darwin 2>&1 | sed 's/^/[arm]   /' &
     PID1=$!
