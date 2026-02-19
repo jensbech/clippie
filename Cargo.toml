@@ -1,11 +1,11 @@
 [package]
 name = "clippie"
-version = "1.3.0"
+version = "2.0.3"
 edition = "2024"
 authors = ["Jens Bech-Sørensen"]
 license = "MIT"
 description = "A fast, keyboard-driven clipboard history manager for macOS"
-repository = "https://git.bechsor.no/jens/clippie"
+repository = "https://github.com/jensbech/clippie"
 
 [dependencies]
 # CLI & Arguments

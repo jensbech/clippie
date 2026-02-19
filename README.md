@@ -1,15 +1,18 @@
-# Clippie
+<p align="center">
+  <img src="logo.svg" alt="Clippie" width="120" />
+</p>
 
-Fast keyboard-driven clipboard history manager for macOS.
+<h1 align="center">Clippie</h1>
 
-## Quick Start
+<p align="center">Fast keyboard-driven clipboard history manager for macOS.</p>
 
-```bash
-curl -fsSL https://git.bechsor.no/jens/clippie/raw/branch/main/install | bash
-clippie setup
-```
+## Install
+`curl -fsSL https://raw.githubusercontent.com/jensbech/clippie/main/install | bash`
 
-## Commands
+## Setup
+`clippie setup`
+
+## Usage
 
 ```bash
 clippie              # Browse clipboard history (fuzzy search with /)
@@ -28,30 +31,3 @@ clippie clear        # Delete old entries
 | `/` | Fuzzy search |
 | `r` | Refresh |
 | `q`/`Esc` | Quit |
-
-## Features
-
-- ⚡ Fast startup and search
-- 🔍 Fuzzy search with multi-position highlighting
-- 🔄 Auto-refresh every 5 seconds
-- 📦 System-wide clipboard detection
-- 💾 SQLite database
-- 🎨 Clean TUI with keyboard navigation
-
-## Locations
-
-- Database: `~/.clippie/clipboard.db`
-- Logs: `~/.clippie/daemon.log` and `daemon.err`
-
-## Requirements
-
-- macOS 10.15+
-- sqlite3 (pre-installed)
-
-## Development
-
-```bash
-cargo build --release
-just build-local    # faster, current arch only
-just release        # optimized release build
-```
