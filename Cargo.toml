@@ -1,6 +1,6 @@
 [package]
 name = "clippie"
-version = "2.0.3"
+version = "2.0.5"
 edition = "2024"
 authors = ["Jens Bech-Sørensen"]
 license = "MIT"
