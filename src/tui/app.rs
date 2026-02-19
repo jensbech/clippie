@@ -68,6 +68,8 @@ pub struct App {
     pub delete_mode: DeleteMode,
     /// Selected period index (for period selection popup)
     pub delete_period_index: usize,
+    /// Confirm quit dialog active
+    pub confirm_quit: bool,
 }
 
 impl App {
@@ -93,6 +95,7 @@ impl App {
             tick_count: 0,
             delete_mode: DeleteMode::None,
             delete_period_index: 0,
+            confirm_quit: false,
         }
     }
 

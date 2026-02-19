@@ -11,6 +11,27 @@ use ratatui::{
 use regex::Regex;
 use crate::tui::app::DeletePeriod;
 
+// ── Color palette (matching mindful-jira) ───────────────────
+const ZEBRA_DARK: Color = Color::Rgb(30, 30, 40);
+const HIGHLIGHT_BG: Color = Color::Rgb(55, 55, 80);
+const DIM: Color = Color::Rgb(100, 100, 110);
+const ACCENT: Color = Color::Rgb(180, 180, 255);
+const BORDER_COLOR: Color = Color::Rgb(60, 60, 80);
+const HINT_COLOR: Color = Color::Rgb(120, 120, 140);
+const SEARCH_BG: Color = Color::Rgb(25, 25, 35);
+
+pub fn dim_background(f: &mut Frame) {
+    let area = f.size();
+    let buf = f.buffer_mut();
+    for y in area.top()..area.bottom() {
+        for x in area.left()..area.right() {
+            let cell = buf.get_mut(x, y);
+            cell.set_fg(Color::Rgb(50, 50, 60));
+            cell.set_bg(Color::Rgb(10, 10, 15));
+        }
+    }
+}
+
 static EMAIL_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap()
 });
@@ -146,29 +167,95 @@ fn highlight_search(text: &str, query: &str) -> Vec<Span<'static>> {
     }
 }
 
-pub fn draw_header(f: &mut Frame, area: Rect, title: &str, subtitle: &str, loading: bool) {
+pub fn draw_header(f: &mut Frame, area: Rect, _title: &str, subtitle: &str, loading: bool) {
     let display_subtitle = if loading { "Loading..." } else { subtitle };
 
-    let header_text = if display_subtitle.is_empty() {
-        Line::from(vec![
-            Span::styled("clipboard", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" - "),
-            Span::styled(title, Style::default().bold()),
-        ])
-    } else {
-        Line::from(vec![
-            Span::styled("clipboard", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" - "),
-            Span::styled(title, Style::default().bold()),
-            Span::raw(" ("),
-            Span::styled(display_subtitle, Style::default().fg(Color::Gray)),
-            Span::raw(")"),
-        ])
-    };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(BORDER_COLOR))
+        .title(Line::from(vec![
+            Span::styled(
+                " Clippie ",
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("v{} ", env!("CARGO_PKG_VERSION")),
+                Style::default().fg(Color::Rgb(80, 80, 100)),
+            ),
+        ]));
 
-    let divider = "─".repeat(area.width as usize);
-    let lines = vec![header_text, Line::from(Span::styled(divider, Style::default().fg(Color::Gray)))];
-    f.render_widget(Paragraph::new(lines), area);
+    f.render_widget(block, area);
+
+    // Render subtitle inside the border at the right side
+    if !display_subtitle.is_empty() {
+        let sub_text = format!(" {} ", display_subtitle);
+        let sub_len = sub_text.chars().count() as u16;
+        let x = area.x + area.width.saturating_sub(sub_len + 2);
+        let sub_area = Rect::new(x, area.y, sub_len, 1);
+        f.render_widget(
+            Paragraph::new(Span::styled(sub_text, Style::default().fg(DIM))),
+            sub_area,
+        );
+    }
+}
+
+pub fn draw_search_bar(f: &mut Frame, area: Rect, filter_text: &str, is_filtering: bool, match_count: usize) {
+    let cursor = if is_filtering { "│" } else { "" };
+    let line = Line::from(vec![
+        Span::styled(
+            " /",
+            Style::default()
+                .fg(Color::Rgb(255, 200, 60))
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            filter_text.to_string(),
+            Style::default().fg(Color::White),
+        ),
+        Span::styled(cursor.to_string(), Style::default().fg(Color::Rgb(255, 200, 60))),
+        Span::styled(
+            format!("  ({} matches)", match_count),
+            Style::default().fg(Color::Rgb(100, 100, 120)),
+        ),
+    ]);
+
+    f.render_widget(Paragraph::new(line).style(Style::default().bg(SEARCH_BG)), area);
+}
+
+pub fn draw_confirm_quit_popup(f: &mut Frame, area: Rect) {
+    let width = 36u16.min(area.width.saturating_sub(4));
+    let height = 6u16;
+    let x = (area.width.saturating_sub(width)) / 2;
+    let y = (area.height.saturating_sub(height)) / 2;
+    let modal_area = Rect::new(x, y, width, height);
+
+    f.render_widget(Clear, modal_area);
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(ACCENT))
+        .title(Span::styled(
+            " Quit ",
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        ));
+
+    let inner = block.inner(modal_area);
+    f.render_widget(block, modal_area);
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Quit Clippie?",
+            Style::default().fg(Color::White),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  y/Enter:Quit  n/Esc:Cancel",
+            Style::default().fg(Color::Rgb(100, 100, 120)),
+        )),
+    ];
+
+    f.render_widget(Paragraph::new(lines), inner);
 }
 
 pub fn draw_entry_list(
@@ -180,32 +267,60 @@ pub fn draw_entry_list(
     filter_text: &str,
 ) {
     let width = area.width as usize;
-    let content_max_width = width.saturating_sub(13);
+    let content_max_width = width.saturating_sub(15); // selector(3) + date(10) + padding(2)
 
     let visible_entries: Vec<Line> = entries
         .iter()
         .enumerate()
         .map(|(idx, entry)| {
-            let is_selected = (scroll_offset + idx) == selected_index;
+            let absolute_idx = scroll_offset + idx;
+            let is_selected = absolute_idx == selected_index;
             let content_preview = entry.content.replace('\n', "↵").replace('\r', "");
 
             let content_display = if content_preview.chars().count() > content_max_width {
                 let truncated: String = content_preview.chars().take(content_max_width.saturating_sub(1)).collect();
-                format!("{}…", truncated)
+                format!("{truncated}…")
             } else {
                 content_preview
             };
 
             let date_str = format_relative_date(&entry.last_copied);
-            let selector = if is_selected { ">" } else { " " };
-            let style = if is_selected { Style::default().fg(Color::Cyan) } else { Style::default() };
+
+            // Zebra striping + highlight for selected row
+            let bg = if is_selected {
+                HIGHLIGHT_BG
+            } else if absolute_idx % 2 == 1 {
+                ZEBRA_DARK
+            } else {
+                Color::Reset
+            };
+
+            let fg = if is_selected { Color::White } else { Color::Rgb(200, 200, 210) };
+            let date_fg = if is_selected { Color::Rgb(160, 160, 180) } else { DIM };
+            let selector = if is_selected { "▶ " } else { "  " };
+            let selector_style = Style::default().fg(ACCENT).bg(bg).add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() });
 
             if filter_text.is_empty() {
-                let full_line = format!("{} {:width$}{:>10}", selector, content_display, date_str, width = content_max_width);
-                Line::from(full_line).patch_style(style)
+                let mut spans = vec![
+                    Span::styled(selector, selector_style),
+                    Span::styled(content_display.clone(), Style::default().fg(fg).bg(bg)),
+                ];
+                let current_len: usize = selector.chars().count() + content_display.chars().count();
+                let padding = content_max_width.saturating_sub(content_display.chars().count());
+                if padding > 0 {
+                    spans.push(Span::styled(" ".repeat(padding), Style::default().bg(bg)));
+                }
+                spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(date_fg).bg(bg)));
+                // Fill remaining space with bg color
+                let total: usize = current_len + padding + 10;
+                let remaining = width.saturating_sub(total);
+                if remaining > 0 {
+                    spans.push(Span::styled(" ".repeat(remaining), Style::default().bg(bg)));
+                }
+                Line::from(spans)
             } else {
                 let fuzzy_result = fuzzy::fuzzy_match(&content_display, filter_text);
-                let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
+                let mut spans: Vec<Span> = vec![Span::styled(selector, selector_style)];
 
                 if fuzzy_result.matched {
                     let chars: Vec<char> = content_display.chars().collect();
@@ -213,38 +328,44 @@ pub fn draw_entry_list(
 
                     for (match_start, match_len) in &fuzzy_result.match_positions {
                         if *match_start > last_pos {
-                            spans.push(Span::raw(chars[last_pos..*match_start].iter().collect::<String>()));
+                            spans.push(Span::styled(
+                                chars[last_pos..*match_start].iter().collect::<String>(),
+                                Style::default().fg(fg).bg(bg),
+                            ));
                         }
                         spans.push(Span::styled(
                             chars[*match_start..(*match_start + match_len)].iter().collect::<String>(),
-                            Style::default().bg(Color::Yellow).fg(Color::Black),
+                            Style::default().fg(Color::Rgb(255, 200, 60)).bg(bg).add_modifier(Modifier::BOLD),
                         ));
                         last_pos = *match_start + match_len;
                     }
                     if last_pos < chars.len() {
-                        spans.push(Span::raw(chars[last_pos..].iter().collect::<String>()));
+                        spans.push(Span::styled(
+                            chars[last_pos..].iter().collect::<String>(),
+                            Style::default().fg(fg).bg(bg),
+                        ));
                     }
                 } else {
-                    spans.push(Span::raw(content_display));
+                    spans.push(Span::styled(content_display.clone(), Style::default().fg(fg).bg(bg)));
                 }
 
                 let current_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-                let padding = content_max_width.saturating_sub(current_len.saturating_sub(2));
+                let padding = (selector.chars().count() + content_max_width).saturating_sub(current_len);
                 if padding > 0 {
-                    spans.push(Span::raw(" ".repeat(padding)));
+                    spans.push(Span::styled(" ".repeat(padding), Style::default().bg(bg)));
                 }
 
-                spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(Color::Gray)));
-                Line::from(spans).patch_style(style)
+                spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(date_fg).bg(bg)));
+                Line::from(spans)
             }
         })
         .collect();
 
     if visible_entries.is_empty() {
-        let message = if entries.is_empty() { "No clipboard history found." } else { "No matches." };
-        f.render_widget(Paragraph::new(message).style(Style::default().fg(Color::Gray)), area);
+        let message = if entries.is_empty() { "  No clipboard history found." } else { "  No matches." };
+        f.render_widget(Paragraph::new(message).style(Style::default().fg(DIM)), area);
     } else {
-        f.render_widget(Paragraph::new(visible_entries).block(Block::default()), area);
+        f.render_widget(Paragraph::new(visible_entries), area);
     }
 }
 
@@ -264,7 +385,7 @@ pub fn draw_preview(
 
         lines.push(Line::from(Span::styled(
             format!("─ {}", format_absolute_date(&e.created_at)),
-            Style::default().fg(Color::Gray),
+            Style::default().fg(DIM),
         )));
         lines.push(Line::from(""));
 
@@ -284,7 +405,7 @@ pub fn draw_preview(
 
         (lines, first_match)
     } else {
-        (vec![Line::from(Span::styled("No entry selected", Style::default().fg(Color::Gray)))], None)
+        (vec![Line::from(Span::styled("No entry selected", Style::default().fg(DIM)))], None)
     };
 
     let total_lines = lines.len();
@@ -356,39 +477,81 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
     lines
 }
 
-pub fn draw_status_bar(f: &mut Frame, area: Rect, is_filtering: bool, filter_text: &str, _db_path: &str) {
-    let content = if is_filtering {
-        Line::from(vec![
-            Span::styled("🔍 Filter: ", Style::default().fg(Color::Yellow).bold()),
-            Span::raw(filter_text),
-            Span::styled("_", Style::default().fg(Color::Yellow)),
-            Span::styled("  ⏎ ", Style::default().fg(Color::Green)),
-            Span::styled("confirm", Style::default().fg(Color::Green).dim()),
-            Span::styled("  ⎋ ", Style::default().fg(Color::Red)),
-            Span::styled("cancel", Style::default().fg(Color::Red).dim()),
-        ])
+pub fn draw_status_bar(
+    f: &mut Frame,
+    area: Rect,
+    is_filtering: bool,
+    filter_text: &str,
+    confirm_quit: bool,
+    is_in_delete_mode: bool,
+    message: Option<&str>,
+) {
+    let (mode_badge, help_text) = if confirm_quit {
+        (
+            Span::styled(
+                " QUIT ",
+                Style::default()
+                    .bg(Color::Rgb(180, 60, 60))
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            " y/Enter:Quit  n/Esc:Cancel ",
+        )
+    } else if is_in_delete_mode {
+        (
+            Span::styled(
+                " DELETE ",
+                Style::default()
+                    .bg(Color::Red)
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            " y:Confirm  n/Esc:Cancel  j/k:Navigate ",
+        )
+    } else if is_filtering {
+        (
+            Span::styled(
+                " FILTER ",
+                Style::default()
+                    .bg(Color::Rgb(180, 160, 40))
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            " Type to filter  Enter:Keep  Esc:Clear ",
+        )
+    } else if !filter_text.is_empty() {
+        (
+            Span::styled(
+                " FILTERED ",
+                Style::default()
+                    .bg(Color::Rgb(180, 130, 50))
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            " q:Quit  j/k:Nav  Enter:Copy  /:Filter  d:Del  x:Del  D:Bulk  r:Refresh  h/l:Scroll ",
+        )
     } else {
-        Line::from(vec![
-            Span::styled("⏎", Style::default().fg(Color::Green).bold()),
-            Span::raw(" copy "),
-            Span::styled("/", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" filter "),
-            Span::styled("d", Style::default().fg(Color::Red).bold()),
-            Span::raw(" del "),
-            Span::styled("r", Style::default().fg(Color::Yellow).bold()),
-            Span::raw(" refresh "),
-            Span::styled("h/l", Style::default().fg(Color::Blue).bold()),
-            Span::raw(" scroll "),
-            Span::styled("x", Style::default().fg(Color::Red).bold()),
-            Span::raw(" del "),
-            Span::styled("D", Style::default().fg(Color::Red).bold()),
-            Span::raw(" bulk "),
-            Span::styled("q", Style::default().fg(Color::Magenta).bold()),
-            Span::raw(" quit"),
-        ])
+        (
+            Span::styled(
+                " NORMAL ",
+                Style::default()
+                    .bg(Color::Rgb(60, 60, 120))
+                    .fg(Color::White),
+            ),
+            " q:Quit  j/k:Nav  Enter:Copy  /:Filter  d:Del  x:Del  D:Bulk  r:Refresh  h/l:Scroll ",
+        )
     };
 
-    f.render_widget(Paragraph::new(content), area);
+    let mut spans = vec![
+        mode_badge,
+        Span::styled(help_text, Style::default().fg(HINT_COLOR)),
+    ];
+
+    if let Some(msg) = message {
+        spans.push(Span::styled(msg, Style::default().fg(Color::Rgb(140, 200, 255))));
+    }
+
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 fn format_relative_date(date: &DateTime<Utc>) -> String {
@@ -443,11 +606,14 @@ pub fn draw_delete_period_popup(
     // Center popup
     let popup_area = centered_rect(50, 40, area);
 
-    // Clear background
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .title(" Delete History ")
+        .border_style(Style::default().fg(ACCENT))
+        .title(Span::styled(
+            " Delete History ",
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        ))
         .title_alignment(Alignment::Center)
         .style(Style::default().bg(Color::Black).fg(Color::White));
 
@@ -531,9 +697,13 @@ pub fn draw_delete_confirmation_popup(
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .title(title)
+        .border_style(Style::default().fg(Color::Rgb(180, 60, 60)))
+        .title(Span::styled(
+            title,
+            Style::default().fg(Color::Rgb(180, 60, 60)).add_modifier(Modifier::BOLD),
+        ))
         .title_alignment(Alignment::Center)
-        .style(Style::default().bg(Color::Black).fg(Color::Red));
+        .style(Style::default().bg(Color::Black).fg(Color::White));
 
     f.render_widget(Clear, popup_area);
     f.render_widget(block, popup_area);
@@ -597,9 +767,13 @@ pub fn draw_single_delete_confirmation_popup(
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .title(" Delete Entry ")
+        .border_style(Style::default().fg(ACCENT))
+        .title(Span::styled(
+            " Delete Entry ",
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        ))
         .title_alignment(Alignment::Center)
-        .style(Style::default().bg(Color::Black).fg(Color::Yellow));
+        .style(Style::default().bg(Color::Black).fg(Color::White));
 
     f.render_widget(Clear, popup_area);
     f.render_widget(block, popup_area);

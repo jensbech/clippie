@@ -1,6 +1,7 @@
 use super::app::{App, DeleteMode, DeletePeriod};
 use super::components::{
-    draw_entry_list, draw_header, draw_preview, draw_status_bar,
+    dim_background, draw_confirm_quit_popup, draw_entry_list, draw_header, draw_preview,
+    draw_search_bar, draw_status_bar,
     draw_delete_period_popup, draw_delete_confirmation_popup, draw_single_delete_confirmation_popup,
 };
 use ratatui::prelude::*;
@@ -14,31 +15,44 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         return;
     }
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
+    let show_search_bar = app.is_filtering || !app.filter_text.is_empty();
+
+    let constraints = if show_search_bar {
+        vec![
             Constraint::Min(5),
             Constraint::Length(1),
-        ])
+            Constraint::Length(1),
+        ]
+    } else {
+        vec![
+            Constraint::Min(5),
+            Constraint::Length(1),
+        ]
+    };
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
         .split(size);
 
-    let header_area = chunks[0];
-    let body_area = chunks[1];
-    let status_area = chunks[2];
+    let body_area = chunks[0];
 
+    // Draw the bordered header/body area
     draw_header(
         f,
-        header_area,
+        body_area,
         "History",
         &app.get_entry_count_info(),
         app.loading,
     );
 
+    // Inner area inside the border
+    let inner = body_area.inner(&ratatui::layout::Margin { vertical: 1, horizontal: 1 });
+
     let body_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(50), Constraint::Length(1), Constraint::Percentage(50)])
-        .split(body_area);
+        .split(inner);
 
     let list_area = body_chunks[0];
     let divider_area = body_chunks[1];
@@ -54,11 +68,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         &app.filter_text,
     );
 
-    let divider_lines: Vec<_> = (0..list_area.height)
+    let divider_lines: Vec<_> = (0..divider_area.height)
         .map(|_| ratatui::text::Line::from("│"))
         .collect();
     let divider = ratatui::widgets::Paragraph::new(divider_lines)
-        .style(Style::default().fg(Color::Gray));
+        .style(Style::default().fg(Color::Rgb(60, 60, 80)));
     f.render_widget(divider, divider_area);
 
     let current_entry = app.current_entry();
@@ -82,28 +96,60 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         app.preview_scroll = max_scroll;
     }
 
-    draw_status_bar(
-        f,
-        status_area,
-        app.is_filtering,
-        &app.filter_text,
-        &app.get_db_path_short(),
-    );
+    // Draw search bar if active
+    if show_search_bar {
+        let match_count = app.filtered_entries().len();
+        draw_search_bar(
+            f,
+            chunks[1],
+            &app.filter_text,
+            app.is_filtering,
+            match_count,
+        );
+        draw_status_bar(
+            f,
+            chunks[2],
+            app.is_filtering,
+            &app.filter_text,
+            app.confirm_quit,
+            app.is_in_delete_mode(),
+            app.message.as_deref(),
+        );
+    } else {
+        draw_status_bar(
+            f,
+            chunks[1],
+            app.is_filtering,
+            &app.filter_text,
+            app.confirm_quit,
+            app.is_in_delete_mode(),
+            app.message.as_deref(),
+        );
+    }
 
-    // Render delete popups on top of everything
+    // Render overlays on top of everything
+    if app.confirm_quit {
+        dim_background(f);
+        draw_confirm_quit_popup(f, size);
+    }
+
     match &app.delete_mode {
         DeleteMode::SelectingPeriod => {
+            dim_background(f);
             draw_delete_period_popup(f, size, app.delete_period_index);
         }
         DeleteMode::ConfirmingBulk { period } => {
+            dim_background(f);
             draw_delete_confirmation_popup(f, size, *period, false, 0);
         }
         DeleteMode::ConfirmingSingle => {
             if let Some(entry) = app.current_entry() {
+                dim_background(f);
                 draw_single_delete_confirmation_popup(f, size, entry);
             }
         }
         DeleteMode::ConfirmingAll { confirmation_count } => {
+            dim_background(f);
             draw_delete_confirmation_popup(
                 f,
                 size,

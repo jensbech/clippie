@@ -22,6 +22,10 @@ impl EventHandler {
     }
 
     fn handle_key(key: KeyEvent, app: &mut App) -> bool {
+        if app.confirm_quit {
+            return Self::handle_confirm_quit(key, app);
+        }
+
         if app.is_in_delete_mode() {
             return Self::handle_delete_mode(key, app);
         }
@@ -78,12 +82,22 @@ impl EventHandler {
                 for _ in 0..10 { app.scroll_preview_down(); }
                 false
             }
-            KeyCode::Char('q') | KeyCode::Esc if key.modifiers == KeyModifiers::NONE => {
+            KeyCode::Char('q') if key.modifiers == KeyModifiers::NONE => {
+                if !app.filter_text.is_empty() {
+                    app.stop_filtering();
+                    false
+                } else {
+                    app.confirm_quit = true;
+                    false
+                }
+            }
+            KeyCode::Esc if key.modifiers == KeyModifiers::NONE => {
                 if app.is_filtering || !app.filter_text.is_empty() {
                     app.stop_filtering();
                     false
                 } else {
-                    true
+                    app.confirm_quit = true;
+                    false
                 }
             }
             KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => true,
@@ -101,6 +115,17 @@ impl EventHandler {
             }
             KeyCode::Char('D') if key.modifiers == KeyModifiers::SHIFT => {
                 app.start_bulk_delete();
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_confirm_quit(key: KeyEvent, app: &mut App) -> bool {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Enter => true,
+            KeyCode::Char('n') | KeyCode::Esc => {
+                app.confirm_quit = false;
                 false
             }
             _ => false,
@@ -343,11 +368,31 @@ mod tests {
     }
 
     #[test]
-    fn test_quit() {
+    fn test_quit_shows_confirm() {
         let mut app = create_test_app();
         let event = Event::Key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
         let should_exit = EventHandler::handle(&event, &mut app);
+        assert!(!should_exit);
+        assert!(app.confirm_quit);
+    }
+
+    #[test]
+    fn test_confirm_quit_yes() {
+        let mut app = create_test_app();
+        app.confirm_quit = true;
+        let event = Event::Key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+        let should_exit = EventHandler::handle(&event, &mut app);
         assert!(should_exit);
+    }
+
+    #[test]
+    fn test_confirm_quit_cancel() {
+        let mut app = create_test_app();
+        app.confirm_quit = true;
+        let event = Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        let should_exit = EventHandler::handle(&event, &mut app);
+        assert!(!should_exit);
+        assert!(!app.confirm_quit);
     }
 
     #[test]
