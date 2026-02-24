@@ -14,6 +14,16 @@ _run *ARGS:
     #!/usr/bin/env bash
     set -e
     [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+    if ! command -v cargo &>/dev/null && [ -d "$HOME/.cargo/bin" ]; then
+        export PATH="$HOME/.cargo/bin:$PATH"
+    fi
+    if ! command -v cargo &>/dev/null; then
+        _arch=$(uname -m)
+        for _c in "$HOME/.rustup/toolchains/stable-${_arch}-apple-darwin/bin" "/opt/homebrew/bin"; do
+            [ -x "${_c}/cargo" ] && export PATH="${_c}:$PATH" && break
+        done
+        unset _arch _c
+    fi
     if [ -x "../rust-build-tools/rust-build" ]; then
         ../rust-build-tools/rust-build {{ARGS}}
     else
