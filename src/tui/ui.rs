@@ -3,13 +3,20 @@ use super::components::{
     draw_entry_list, draw_header, draw_preview, draw_status_bar,
     draw_delete_period_popup, draw_delete_confirmation_popup, draw_single_delete_confirmation_popup,
 };
+use super::theme::{BASE_BG, BORDER_FG};
 use ratatui::prelude::*;
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.size();
 
+    f.render_widget(
+        ratatui::widgets::Block::default().style(Style::default().bg(BASE_BG)),
+        size,
+    );
+
     if size.height < 5 {
-        let paragraph = ratatui::widgets::Paragraph::new("Terminal too small");
+        let paragraph = ratatui::widgets::Paragraph::new("Terminal too small")
+            .style(Style::default().bg(BASE_BG));
         f.render_widget(paragraph, size);
         return;
     }
@@ -58,7 +65,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .map(|_| ratatui::text::Line::from("│"))
         .collect();
     let divider = ratatui::widgets::Paragraph::new(divider_lines)
-        .style(Style::default().fg(Color::DarkGray));
+        .style(Style::default().fg(BORDER_FG).bg(BASE_BG));
     f.render_widget(divider, divider_area);
 
     let current_entry = app.current_entry();
@@ -90,7 +97,6 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         &app.get_db_path_short(),
     );
 
-    // Render delete popups on top of everything
     match &app.delete_mode {
         DeleteMode::SelectingPeriod => {
             draw_delete_period_popup(f, size, app.delete_period_index);

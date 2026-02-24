@@ -3,6 +3,7 @@ pub mod components;
 pub mod events;
 pub mod fuzzy;
 pub mod handlers;
+pub mod theme;
 pub mod ui;
 
 pub use app::App;

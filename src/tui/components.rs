@@ -1,5 +1,6 @@
 use crate::db::ClipboardEntry;
 use crate::tui::fuzzy;
+use crate::tui::theme::*;
 use chrono::{DateTime, Local, Utc};
 use once_cell::sync::Lazy;
 use ratatui::{
@@ -39,11 +40,11 @@ enum PatternType {
 impl PatternType {
     fn color(self) -> Color {
         match self {
-            PatternType::Email => Color::Cyan,
-            PatternType::Url => Color::Blue,
-            PatternType::Ip => Color::Blue,
-            PatternType::Secret => Color::Red,
-            PatternType::Uuid => Color::Blue,
+            PatternType::Email => PATTERN_EMAIL,
+            PatternType::Url => PATTERN_DATA,
+            PatternType::Ip => PATTERN_DATA,
+            PatternType::Secret => PATTERN_SECRET,
+            PatternType::Uuid => PATTERN_DATA,
         }
     }
 }
@@ -126,7 +127,7 @@ fn highlight_search(text: &str, query: &str) -> Vec<Span<'static>> {
             }
             spans.push(Span::styled(
                 chars[i..i + query_chars.len()].iter().collect::<String>(),
-                Style::default().bg(Color::Yellow).fg(Color::Black),
+                Style::default().bg(MATCH_FG).fg(BASE_BG),
             ));
             last_end = i + query_chars.len();
             i = last_end;
@@ -167,12 +168,12 @@ fn make_group_header_line(label: &str, width: usize) -> Line<'static> {
     let prefix = format!("── {} ", label);
     let fill_len = width.saturating_sub(prefix.chars().count());
     let line_str = format!("{}{}", prefix, "─".repeat(fill_len));
-    Line::from(Span::styled(line_str, Style::default().fg(Color::DarkGray)))
+    Line::from(Span::styled(line_str, Style::default().fg(BORDER_FG)))
 }
 
 fn build_content_spans(text: &str, is_selected: bool) -> Vec<Span<'static>> {
     if !is_selected {
-        return vec![Span::styled(text.to_string(), Style::default().fg(Color::DarkGray))];
+        return vec![Span::styled(text.to_string(), Style::default().fg(DIM))];
     }
     let chars: Vec<char> = text.chars().collect();
     let mut spans = vec![];
@@ -182,17 +183,17 @@ fn build_content_spans(text: &str, is_selected: bool) -> Vec<Span<'static>> {
             if i > last_pos {
                 spans.push(Span::styled(
                     chars[last_pos..i].iter().collect::<String>(),
-                    Style::default().fg(Color::Cyan),
+                    Style::default().fg(FG),
                 ));
             }
-            spans.push(Span::styled("↵".to_string(), Style::default().fg(Color::DarkGray)));
+            spans.push(Span::styled("↵".to_string(), Style::default().fg(DIM)));
             last_pos = i + 1;
         }
     }
     if last_pos < chars.len() {
         spans.push(Span::styled(
             chars[last_pos..].iter().collect::<String>(),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(FG),
         ));
     }
     if spans.is_empty() {
@@ -206,24 +207,23 @@ pub fn draw_header(f: &mut Frame, area: Rect, title: &str, subtitle: &str, loadi
 
     let header_text = if display_subtitle.is_empty() {
         Line::from(vec![
-            Span::styled("clipboard", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" - "),
-            Span::styled(title, Style::default().bold()),
+            Span::styled("clippie", Style::default().fg(ACCENT).bold()),
+            Span::styled(format!(" — {}", title), Style::default().fg(HEADER_FG)),
         ])
     } else {
         Line::from(vec![
-            Span::styled("clipboard", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" - "),
-            Span::styled(title, Style::default().bold()),
-            Span::raw(" ("),
-            Span::styled(display_subtitle, Style::default().fg(Color::Gray)),
-            Span::raw(")"),
+            Span::styled("clippie", Style::default().fg(ACCENT).bold()),
+            Span::styled(format!(" — {}", title), Style::default().fg(HEADER_FG)),
+            Span::styled(format!("  {}", display_subtitle), Style::default().fg(HELP_FG)),
         ])
     };
 
     let divider = "─".repeat(area.width as usize);
-    let lines = vec![header_text, Line::from(Span::styled(divider, Style::default().fg(Color::Gray)))];
-    f.render_widget(Paragraph::new(lines), area);
+    let lines = vec![header_text, Line::from(Span::styled(divider, Style::default().fg(BORDER_FG)))];
+    f.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(BASE_BG)),
+        area,
+    );
 }
 
 pub fn draw_entry_list(
@@ -240,7 +240,11 @@ pub fn draw_entry_list(
 
     if all_entries.is_empty() {
         let message = if filter_text.is_empty() { "No clipboard history found." } else { "No matches." };
-        f.render_widget(Paragraph::new(message).style(Style::default().fg(Color::DarkGray)), area);
+        f.render_widget(
+            Paragraph::new(message)
+                .style(Style::default().fg(DIM).bg(BASE_BG)),
+            area,
+        );
         return;
     }
 
@@ -287,48 +291,59 @@ pub fn draw_entry_list(
 
         let content_len = content_truncated.chars().count();
         let pad = content_max_width.saturating_sub(content_len);
-        let selector = if is_selected { ">" } else { " " };
+        let selector = if is_selected { "▶ " } else { "  " };
 
         let line = if filter_text.is_empty() {
             let selector_style = if is_selected {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(ACCENT)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(BORDER_FG)
             };
-            let mut spans: Vec<Span> = vec![Span::styled(format!("{} ", selector), selector_style)];
+            let mut spans: Vec<Span> = vec![Span::styled(selector.to_string(), selector_style)];
             spans.extend(build_content_spans(&content_truncated, is_selected));
             if pad > 0 {
                 spans.push(Span::raw(" ".repeat(pad)));
             }
             let date_style = if is_selected {
-                Style::default().fg(Color::Gray)
+                Style::default().fg(HELP_FG)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(DIM)
             };
             spans.push(Span::styled(format!("{:>10}", date_str), date_style));
-            Line::from(spans)
+            let line = Line::from(spans);
+            if is_selected {
+                line.patch_style(Style::default().bg(HIGHLIGHT_BG))
+            } else {
+                line
+            }
         } else {
             let fuzzy_result = fuzzy::fuzzy_match(&content_truncated, filter_text);
-            let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
+            let mut spans: Vec<Span> = vec![Span::raw(selector.to_string())];
 
             if fuzzy_result.matched {
                 let chars: Vec<char> = content_truncated.chars().collect();
                 let mut last_pos = 0;
                 for (match_start, match_len) in &fuzzy_result.match_positions {
                     if *match_start > last_pos {
-                        spans.push(Span::raw(chars[last_pos..*match_start].iter().collect::<String>()));
+                        spans.push(Span::styled(
+                            chars[last_pos..*match_start].iter().collect::<String>(),
+                            Style::default().fg(DIM),
+                        ));
                     }
                     spans.push(Span::styled(
                         chars[*match_start..(*match_start + match_len)].iter().collect::<String>(),
-                        Style::default().bg(Color::Yellow).fg(Color::Black),
+                        Style::default().bg(MATCH_FG).fg(BASE_BG),
                     ));
                     last_pos = *match_start + match_len;
                 }
                 if last_pos < chars.len() {
-                    spans.push(Span::raw(chars[last_pos..].iter().collect::<String>()));
+                    spans.push(Span::styled(
+                        chars[last_pos..].iter().collect::<String>(),
+                        Style::default().fg(DIM),
+                    ));
                 }
             } else {
-                spans.push(Span::raw(content_truncated.clone()));
+                spans.push(Span::styled(content_truncated.clone(), Style::default().fg(DIM)));
             }
 
             let current_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
@@ -336,15 +351,24 @@ pub fn draw_entry_list(
             if padding > 0 {
                 spans.push(Span::raw(" ".repeat(padding)));
             }
-            spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(Color::Gray)));
-            let row_style = if is_selected { Style::default().fg(Color::Cyan) } else { Style::default() };
-            Line::from(spans).patch_style(row_style)
+            spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(DIM)));
+            let line = Line::from(spans);
+            if is_selected {
+                line.patch_style(Style::default().fg(FG).bg(HIGHLIGHT_BG))
+            } else {
+                line
+            }
         };
 
         lines.push(line);
     }
 
-    f.render_widget(Paragraph::new(lines).block(Block::default()), area);
+    f.render_widget(
+        Paragraph::new(lines)
+            .block(Block::default())
+            .style(Style::default().bg(BASE_BG)),
+        area,
+    );
 }
 
 pub fn draw_preview(
@@ -363,7 +387,7 @@ pub fn draw_preview(
 
         lines.push(Line::from(Span::styled(
             format!("─ {}", format_absolute_date(&e.created_at)),
-            Style::default().fg(Color::Gray),
+            Style::default().fg(HELP_FG),
         )));
         lines.push(Line::from(""));
 
@@ -383,14 +407,17 @@ pub fn draw_preview(
 
         (lines, first_match)
     } else {
-        (vec![Line::from(Span::styled("No entry selected", Style::default().fg(Color::Gray)))], None)
+        (vec![Line::from(Span::styled("No entry selected", Style::default().fg(DIM)))], None)
     };
 
     let total_lines = lines.len();
     let visible_lines: Vec<Line> = lines.into_iter().skip(scroll_offset).take(height).collect();
 
     let content_area = Rect { x: area.x, y: area.y, width: area.width.saturating_sub(1), height: area.height };
-    f.render_widget(Paragraph::new(visible_lines), content_area);
+    f.render_widget(
+        Paragraph::new(visible_lines).style(Style::default().bg(BASE_BG)),
+        content_area,
+    );
 
     if total_lines > height {
         let scrollbar_area = Rect { x: area.x + area.width.saturating_sub(1), y: area.y, width: 1, height: area.height };
@@ -416,12 +443,19 @@ fn draw_scrollbar(f: &mut Frame, area: Rect, offset: usize, total: usize, visibl
 
     let scrollbar_lines: Vec<Line> = (0..height)
         .map(|i| {
-            let ch = if i >= thumb_pos && i < thumb_pos + thumb_height { "█" } else { "░" };
-            Line::from(Span::styled(ch, Style::default().fg(Color::Gray)))
+            let (ch, color) = if i >= thumb_pos && i < thumb_pos + thumb_height {
+                ("█", ACCENT)
+            } else {
+                ("░", BORDER_FG)
+            };
+            Line::from(Span::styled(ch, Style::default().fg(color)))
         })
         .collect();
 
-    f.render_widget(Paragraph::new(scrollbar_lines), area);
+    f.render_widget(
+        Paragraph::new(scrollbar_lines).style(Style::default().bg(BASE_BG)),
+        area,
+    );
 }
 
 fn wrap_text(text: &str, width: usize) -> Vec<String> {
@@ -458,30 +492,33 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 pub fn draw_status_bar(f: &mut Frame, area: Rect, is_filtering: bool, filter_text: &str, _db_path: &str) {
     let content = if is_filtering {
         Line::from(vec![
-            Span::styled("🔍 Filter: ", Style::default().fg(Color::Yellow).bold()),
-            Span::raw(filter_text),
-            Span::styled("_", Style::default().fg(Color::Yellow)),
-            Span::styled("  ⏎ ", Style::default().fg(Color::Green)),
-            Span::styled("confirm", Style::default().fg(Color::Green).dim()),
-            Span::styled("  ⎋ ", Style::default().fg(Color::Red)),
-            Span::styled("cancel", Style::default().fg(Color::Red).dim()),
+            Span::styled("/ ", Style::default().fg(MATCH_FG).bold()),
+            Span::styled(filter_text.to_string(), Style::default().fg(FG)),
+            Span::styled("│", Style::default().fg(MATCH_FG)),
+            Span::styled("   ⏎ ", Style::default().fg(STATUS_OK)),
+            Span::styled("confirm", Style::default().fg(HELP_FG)),
+            Span::styled("   ⎋ ", Style::default().fg(STATUS_ERR)),
+            Span::styled("cancel", Style::default().fg(HELP_FG)),
         ])
     } else {
         Line::from(vec![
-            Span::styled("⏎", Style::default().fg(Color::Green).bold()),
-            Span::raw(" copy  "),
-            Span::styled("/", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" search  "),
-            Span::styled("x", Style::default().fg(Color::Red).bold()),
-            Span::raw(" delete  "),
-            Span::styled("D", Style::default().fg(Color::Red).bold()),
-            Span::raw(" bulk delete  "),
-            Span::styled("q", Style::default().fg(Color::DarkGray).bold()),
-            Span::raw(" quit"),
+            Span::styled("⏎", Style::default().fg(STATUS_OK).bold()),
+            Span::styled(" copy  ", Style::default().fg(HELP_FG)),
+            Span::styled("/", Style::default().fg(ACCENT).bold()),
+            Span::styled(" search  ", Style::default().fg(HELP_FG)),
+            Span::styled("x", Style::default().fg(STATUS_ERR).bold()),
+            Span::styled(" delete  ", Style::default().fg(HELP_FG)),
+            Span::styled("D", Style::default().fg(STATUS_ERR).bold()),
+            Span::styled(" bulk delete  ", Style::default().fg(HELP_FG)),
+            Span::styled("q", Style::default().fg(DIM).bold()),
+            Span::styled(" quit", Style::default().fg(HELP_FG)),
         ])
     };
 
-    f.render_widget(Paragraph::new(content), area);
+    f.render_widget(
+        Paragraph::new(content).style(Style::default().bg(BASE_BG)),
+        area,
+    );
 }
 
 fn format_relative_date(date: &DateTime<Utc>) -> String {
@@ -506,7 +543,6 @@ fn format_absolute_date(date: &DateTime<Utc>) -> String {
     date.with_timezone(&Local).format("%b %d at %H:%M").to_string()
 }
 
-/// Helper function to create a centered rect
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -527,27 +563,24 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-/// Draw popup overlay for delete period selection
 pub fn draw_delete_period_popup(
     f: &mut Frame,
     area: Rect,
     selected_index: usize,
 ) {
-    // Center popup
     let popup_area = centered_rect(50, 40, area);
 
-    // Clear background
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(" Delete History ")
         .title_alignment(Alignment::Center)
-        .style(Style::default().bg(Color::Black).fg(Color::White));
+        .style(Style::default().bg(MODAL_BG).fg(MODAL_TITLE))
+        .border_style(Style::default().fg(MODAL_BORDER));
 
     f.render_widget(Clear, popup_area);
     f.render_widget(block, popup_area);
 
-    // Content area (inside border)
     let inner = popup_area.inner(&Margin { vertical: 2, horizontal: 2 });
 
     let periods = vec![
@@ -562,31 +595,34 @@ pub fn draw_delete_period_popup(
     let mut lines = vec![
         Line::from(Span::styled(
             "Select time period to delete:",
-            Style::default().fg(Color::Gray)
+            Style::default().fg(HELP_FG),
         )),
         Line::from(""),
     ];
 
     for (idx, (label, description)) in periods.iter().enumerate() {
-        let is_selected = idx == selected_index;
-        let prefix = if is_selected { "> " } else { "  " };
-        let style = if is_selected {
-            Style::default().fg(Color::Cyan).bold()
+        let is_sel = idx == selected_index;
+        let prefix = if is_sel { "▶ " } else { "  " };
+        let style = if is_sel {
+            Style::default().fg(ACCENT).bold()
         } else if idx == 5 {
-            Style::default().fg(Color::Red)
+            Style::default().fg(STATUS_ERR)
         } else {
-            Style::default()
+            Style::default().fg(FG)
         };
 
-        lines.push(Line::from(Span::styled(
-            format!("{}{}", prefix, label),
-            style,
-        )));
+        let label_line = Line::from(Span::styled(format!("{}{}", prefix, label), style));
+        let line = if is_sel {
+            label_line.patch_style(Style::default().bg(HIGHLIGHT_BG))
+        } else {
+            label_line
+        };
+        lines.push(line);
 
-        if is_selected {
+        if is_sel {
             lines.push(Line::from(Span::styled(
-                format!("  {}", description),
-                Style::default().fg(Color::Gray).italic(),
+                format!("   {}", description),
+                Style::default().fg(HELP_FG),
             )));
         }
 
@@ -595,17 +631,18 @@ pub fn draw_delete_period_popup(
 
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        Span::styled("⏎ ", Style::default().fg(Color::Green)),
-        Span::raw("select  "),
-        Span::styled("⎋ ", Style::default().fg(Color::Red)),
-        Span::raw("cancel"),
+        Span::styled("⏎ ", Style::default().fg(STATUS_OK)),
+        Span::styled("select  ", Style::default().fg(HELP_FG)),
+        Span::styled("⎋ ", Style::default().fg(STATUS_ERR)),
+        Span::styled("cancel", Style::default().fg(HELP_FG)),
     ]));
 
-    let paragraph = Paragraph::new(lines);
-    f.render_widget(paragraph, inner);
+    f.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(MODAL_BG)),
+        inner,
+    );
 }
 
-/// Draw confirmation popup for bulk delete
 pub fn draw_delete_confirmation_popup(
     f: &mut Frame,
     area: Rect,
@@ -621,65 +658,71 @@ pub fn draw_delete_confirmation_popup(
         " Confirm Deletion ".to_string()
     };
 
+    let (bg, border, title_color) = if is_all {
+        (KILL_BG, KILL_BORDER, KILL_TITLE)
+    } else {
+        (MODAL_BG, MODAL_BORDER, MODAL_TITLE)
+    };
+
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title)
         .title_alignment(Alignment::Center)
-        .style(Style::default().bg(Color::Black).fg(Color::Red));
+        .style(Style::default().bg(bg).fg(title_color))
+        .border_style(Style::default().fg(border));
 
     f.render_widget(Clear, popup_area);
     f.render_widget(block, popup_area);
 
     let inner = popup_area.inner(&Margin { vertical: 2, horizontal: 2 });
 
-    let warning_style = Style::default().fg(Color::Red).bold();
-
     let mut lines = vec![
-        Line::from(Span::styled("⚠ WARNING", warning_style)),
+        Line::from(Span::styled("⚠  WARNING", Style::default().fg(STATUS_ERR).bold())),
         Line::from(""),
     ];
 
     if is_all {
         lines.push(Line::from(Span::styled(
             "You are about to delete ALL clipboard history!",
-            warning_style,
+            Style::default().fg(KILL_TITLE).bold(),
         )));
         lines.push(Line::from(Span::styled(
             "This action CANNOT be undone!",
-            warning_style,
+            Style::default().fg(STATUS_ERR),
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             format!("Confirmation {}/3", confirmation_count + 1),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(MATCH_FG),
         )));
     } else {
         lines.push(Line::from(vec![
-            Span::raw("Delete entries from: "),
-            Span::styled(period.display(), Style::default().fg(Color::Yellow).bold()),
+            Span::styled("Delete entries from: ", Style::default().fg(FG)),
+            Span::styled(period.display(), Style::default().fg(MATCH_FG).bold()),
         ]));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "This action cannot be undone.",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(HELP_FG),
         )));
     }
 
     lines.push(Line::from(""));
     lines.push(Line::from(""));
     lines.push(Line::from(vec![
-        Span::styled("y", Style::default().fg(Color::Red).bold()),
-        Span::raw(" confirm  "),
-        Span::styled("n", Style::default().fg(Color::Green).bold()),
-        Span::raw(" cancel"),
+        Span::styled("y", Style::default().fg(STATUS_ERR).bold()),
+        Span::styled(" confirm  ", Style::default().fg(HELP_FG)),
+        Span::styled("n", Style::default().fg(STATUS_OK).bold()),
+        Span::styled(" cancel", Style::default().fg(HELP_FG)),
     ]));
 
-    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
-    f.render_widget(paragraph, inner);
+    f.render_widget(
+        Paragraph::new(lines).alignment(Alignment::Center).style(Style::default().bg(bg)),
+        inner,
+    );
 }
 
-/// Draw confirmation popup for single entry delete
 pub fn draw_single_delete_confirmation_popup(
     f: &mut Frame,
     area: Rect,
@@ -692,7 +735,8 @@ pub fn draw_single_delete_confirmation_popup(
         .border_type(BorderType::Rounded)
         .title(" Delete Entry ")
         .title_alignment(Alignment::Center)
-        .style(Style::default().bg(Color::Black).fg(Color::Yellow));
+        .style(Style::default().bg(MODAL_BG).fg(MODAL_TITLE))
+        .border_style(Style::default().fg(MODAL_BORDER));
 
     f.render_widget(Clear, popup_area);
     f.render_widget(block, popup_area);
@@ -700,7 +744,7 @@ pub fn draw_single_delete_confirmation_popup(
     let inner = popup_area.inner(&Margin { vertical: 2, horizontal: 2 });
 
     let preview = if entry.content.len() > 100 {
-        format!("{}...", &entry.content[..100])
+        format!("{}…", &entry.content[..100])
     } else {
         entry.content.clone()
     }.replace('\n', "↵");
@@ -708,25 +752,24 @@ pub fn draw_single_delete_confirmation_popup(
     let lines = vec![
         Line::from(Span::styled(
             "Delete this clipboard entry?",
-            Style::default().bold(),
+            Style::default().fg(FG).bold(),
         )),
         Line::from(""),
-        Line::from(Span::styled(
-            preview,
-            Style::default().fg(Color::Gray),
-        )),
+        Line::from(Span::styled(preview, Style::default().fg(HELP_FG))),
         Line::from(""),
         Line::from(""),
         Line::from(vec![
-            Span::styled("y", Style::default().fg(Color::Red).bold()),
-            Span::raw(" delete  "),
-            Span::styled("n", Style::default().fg(Color::Green).bold()),
-            Span::raw(" cancel"),
+            Span::styled("y", Style::default().fg(STATUS_ERR).bold()),
+            Span::styled(" delete  ", Style::default().fg(HELP_FG)),
+            Span::styled("n", Style::default().fg(STATUS_OK).bold()),
+            Span::styled(" cancel", Style::default().fg(HELP_FG)),
         ]),
     ];
 
-    let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
-    f.render_widget(paragraph, inner);
+    f.render_widget(
+        Paragraph::new(lines).alignment(Alignment::Center).style(Style::default().bg(MODAL_BG)),
+        inner,
+    );
 }
 
 #[cfg(test)]
