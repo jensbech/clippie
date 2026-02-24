@@ -41,9 +41,9 @@ impl PatternType {
         match self {
             PatternType::Email => Color::Cyan,
             PatternType::Url => Color::Blue,
-            PatternType::Ip => Color::Green,
+            PatternType::Ip => Color::Blue,
             PatternType::Secret => Color::Red,
-            PatternType::Uuid => Color::Magenta,
+            PatternType::Uuid => Color::Blue,
         }
     }
 }
@@ -146,6 +146,61 @@ fn highlight_search(text: &str, query: &str) -> Vec<Span<'static>> {
     }
 }
 
+fn date_group_label(date: &DateTime<Utc>) -> &'static str {
+    let local_now = Local::now().date_naive();
+    let local_date = date.with_timezone(&Local).date_naive();
+    let days_diff = (local_now - local_date).num_days();
+    if days_diff == 0 {
+        "Today"
+    } else if days_diff == 1 {
+        "Yesterday"
+    } else if days_diff < 7 {
+        "This week"
+    } else if days_diff < 30 {
+        "This month"
+    } else {
+        "Older"
+    }
+}
+
+fn make_group_header_line(label: &str, width: usize) -> Line<'static> {
+    let prefix = format!("── {} ", label);
+    let fill_len = width.saturating_sub(prefix.chars().count());
+    let line_str = format!("{}{}", prefix, "─".repeat(fill_len));
+    Line::from(Span::styled(line_str, Style::default().fg(Color::DarkGray)))
+}
+
+fn build_content_spans(text: &str, is_selected: bool) -> Vec<Span<'static>> {
+    if !is_selected {
+        return vec![Span::styled(text.to_string(), Style::default().fg(Color::DarkGray))];
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut spans = vec![];
+    let mut last_pos = 0;
+    for (i, &ch) in chars.iter().enumerate() {
+        if ch == '↵' {
+            if i > last_pos {
+                spans.push(Span::styled(
+                    chars[last_pos..i].iter().collect::<String>(),
+                    Style::default().fg(Color::Cyan),
+                ));
+            }
+            spans.push(Span::styled("↵".to_string(), Style::default().fg(Color::DarkGray)));
+            last_pos = i + 1;
+        }
+    }
+    if last_pos < chars.len() {
+        spans.push(Span::styled(
+            chars[last_pos..].iter().collect::<String>(),
+            Style::default().fg(Color::Cyan),
+        ));
+    }
+    if spans.is_empty() {
+        spans.push(Span::raw(""));
+    }
+    spans
+}
+
 pub fn draw_header(f: &mut Frame, area: Rect, title: &str, subtitle: &str, loading: bool) {
     let display_subtitle = if loading { "Loading..." } else { subtitle };
 
@@ -174,78 +229,122 @@ pub fn draw_header(f: &mut Frame, area: Rect, title: &str, subtitle: &str, loadi
 pub fn draw_entry_list(
     f: &mut Frame,
     area: Rect,
-    entries: Vec<&ClipboardEntry>,
+    all_entries: Vec<&ClipboardEntry>,
     selected_index: usize,
     scroll_offset: usize,
     filter_text: &str,
 ) {
+    let height = area.height as usize;
     let width = area.width as usize;
     let content_max_width = width.saturating_sub(13);
 
-    let visible_entries: Vec<Line> = entries
-        .iter()
-        .enumerate()
-        .map(|(idx, entry)| {
-            let is_selected = (scroll_offset + idx) == selected_index;
-            let content_preview = entry.content.replace('\n', "↵").replace('\r', "");
-
-            let content_display = if content_preview.chars().count() > content_max_width {
-                let truncated: String = content_preview.chars().take(content_max_width.saturating_sub(1)).collect();
-                format!("{}…", truncated)
-            } else {
-                content_preview
-            };
-
-            let date_str = format_relative_date(&entry.last_copied);
-            let selector = if is_selected { ">" } else { " " };
-            let style = if is_selected { Style::default().fg(Color::Cyan) } else { Style::default() };
-
-            if filter_text.is_empty() {
-                let full_line = format!("{} {:width$}{:>10}", selector, content_display, date_str, width = content_max_width);
-                Line::from(full_line).patch_style(style)
-            } else {
-                let fuzzy_result = fuzzy::fuzzy_match(&content_display, filter_text);
-                let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
-
-                if fuzzy_result.matched {
-                    let chars: Vec<char> = content_display.chars().collect();
-                    let mut last_pos = 0;
-
-                    for (match_start, match_len) in &fuzzy_result.match_positions {
-                        if *match_start > last_pos {
-                            spans.push(Span::raw(chars[last_pos..*match_start].iter().collect::<String>()));
-                        }
-                        spans.push(Span::styled(
-                            chars[*match_start..(*match_start + match_len)].iter().collect::<String>(),
-                            Style::default().bg(Color::Yellow).fg(Color::Black),
-                        ));
-                        last_pos = *match_start + match_len;
-                    }
-                    if last_pos < chars.len() {
-                        spans.push(Span::raw(chars[last_pos..].iter().collect::<String>()));
-                    }
-                } else {
-                    spans.push(Span::raw(content_display));
-                }
-
-                let current_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-                let padding = content_max_width.saturating_sub(current_len.saturating_sub(2));
-                if padding > 0 {
-                    spans.push(Span::raw(" ".repeat(padding)));
-                }
-
-                spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(Color::Gray)));
-                Line::from(spans).patch_style(style)
-            }
-        })
-        .collect();
-
-    if visible_entries.is_empty() {
-        let message = if entries.is_empty() { "No clipboard history found." } else { "No matches." };
-        f.render_widget(Paragraph::new(message).style(Style::default().fg(Color::Gray)), area);
-    } else {
-        f.render_widget(Paragraph::new(visible_entries).block(Block::default()), area);
+    if all_entries.is_empty() {
+        let message = if filter_text.is_empty() { "No clipboard history found." } else { "No matches." };
+        f.render_widget(Paragraph::new(message).style(Style::default().fg(Color::DarkGray)), area);
+        return;
     }
+
+    let show_groups = filter_text.is_empty();
+
+    let mut current_group: Option<&'static str> = if show_groups && scroll_offset > 0 {
+        all_entries.get(scroll_offset - 1).map(|e| date_group_label(&e.last_copied))
+    } else {
+        None
+    };
+
+    let mut lines: Vec<Line> = vec![];
+
+    for (abs_idx, entry) in all_entries.iter().enumerate().skip(scroll_offset) {
+        if lines.len() >= height {
+            break;
+        }
+
+        if show_groups {
+            let group = date_group_label(&entry.last_copied);
+            if current_group != Some(group) {
+                lines.push(make_group_header_line(group, width));
+                current_group = Some(group);
+                if lines.len() >= height {
+                    break;
+                }
+            }
+        }
+
+        let is_selected = abs_idx == selected_index;
+        let date_str = format_relative_date(&entry.last_copied);
+
+        let content_raw: String = entry.content.chars()
+            .filter(|&c| c != '\r')
+            .map(|c| if c == '\n' { '↵' } else { c })
+            .collect();
+
+        let content_truncated = if content_raw.chars().count() > content_max_width {
+            let s: String = content_raw.chars().take(content_max_width.saturating_sub(1)).collect();
+            format!("{}…", s)
+        } else {
+            content_raw
+        };
+
+        let content_len = content_truncated.chars().count();
+        let pad = content_max_width.saturating_sub(content_len);
+        let selector = if is_selected { ">" } else { " " };
+
+        let line = if filter_text.is_empty() {
+            let selector_style = if is_selected {
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let mut spans: Vec<Span> = vec![Span::styled(format!("{} ", selector), selector_style)];
+            spans.extend(build_content_spans(&content_truncated, is_selected));
+            if pad > 0 {
+                spans.push(Span::raw(" ".repeat(pad)));
+            }
+            let date_style = if is_selected {
+                Style::default().fg(Color::Gray)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            spans.push(Span::styled(format!("{:>10}", date_str), date_style));
+            Line::from(spans)
+        } else {
+            let fuzzy_result = fuzzy::fuzzy_match(&content_truncated, filter_text);
+            let mut spans: Vec<Span> = vec![Span::raw(format!("{} ", selector))];
+
+            if fuzzy_result.matched {
+                let chars: Vec<char> = content_truncated.chars().collect();
+                let mut last_pos = 0;
+                for (match_start, match_len) in &fuzzy_result.match_positions {
+                    if *match_start > last_pos {
+                        spans.push(Span::raw(chars[last_pos..*match_start].iter().collect::<String>()));
+                    }
+                    spans.push(Span::styled(
+                        chars[*match_start..(*match_start + match_len)].iter().collect::<String>(),
+                        Style::default().bg(Color::Yellow).fg(Color::Black),
+                    ));
+                    last_pos = *match_start + match_len;
+                }
+                if last_pos < chars.len() {
+                    spans.push(Span::raw(chars[last_pos..].iter().collect::<String>()));
+                }
+            } else {
+                spans.push(Span::raw(content_truncated.clone()));
+            }
+
+            let current_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+            let padding = content_max_width.saturating_sub(current_len.saturating_sub(2));
+            if padding > 0 {
+                spans.push(Span::raw(" ".repeat(padding)));
+            }
+            spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(Color::Gray)));
+            let row_style = if is_selected { Style::default().fg(Color::Cyan) } else { Style::default() };
+            Line::from(spans).patch_style(row_style)
+        };
+
+        lines.push(line);
+    }
+
+    f.render_widget(Paragraph::new(lines).block(Block::default()), area);
 }
 
 pub fn draw_preview(
@@ -370,20 +469,14 @@ pub fn draw_status_bar(f: &mut Frame, area: Rect, is_filtering: bool, filter_tex
     } else {
         Line::from(vec![
             Span::styled("⏎", Style::default().fg(Color::Green).bold()),
-            Span::raw(" copy "),
+            Span::raw(" copy  "),
             Span::styled("/", Style::default().fg(Color::Cyan).bold()),
-            Span::raw(" filter "),
-            Span::styled("d", Style::default().fg(Color::Red).bold()),
-            Span::raw(" del "),
-            Span::styled("r", Style::default().fg(Color::Yellow).bold()),
-            Span::raw(" refresh "),
-            Span::styled("h/l", Style::default().fg(Color::Blue).bold()),
-            Span::raw(" scroll "),
+            Span::raw(" search  "),
             Span::styled("x", Style::default().fg(Color::Red).bold()),
-            Span::raw(" del "),
+            Span::raw(" delete  "),
             Span::styled("D", Style::default().fg(Color::Red).bold()),
-            Span::raw(" bulk "),
-            Span::styled("q", Style::default().fg(Color::Magenta).bold()),
+            Span::raw(" bulk delete  "),
+            Span::styled("q", Style::default().fg(Color::DarkGray).bold()),
             Span::raw(" quit"),
         ])
     };

@@ -44,11 +44,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let divider_area = body_chunks[1];
     let preview_area = body_chunks[2];
 
-    let visible_entries = app.get_visible_entries();
+    let all_entries = app.filtered_entries();
     draw_entry_list(
         f,
         list_area,
-        visible_entries,
+        all_entries,
         app.selected_index,
         app.scroll_offset,
         &app.filter_text,
@@ -58,7 +58,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .map(|_| ratatui::text::Line::from("│"))
         .collect();
     let divider = ratatui::widgets::Paragraph::new(divider_lines)
-        .style(Style::default().fg(Color::Gray));
+        .style(Style::default().fg(Color::DarkGray));
     f.render_widget(divider, divider_area);
 
     let current_entry = app.current_entry();
