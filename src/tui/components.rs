@@ -257,6 +257,7 @@ pub fn draw_entry_list(
     };
 
     let mut lines: Vec<Line> = vec![];
+    let mut entry_row_idx: usize = 0;
 
     for (abs_idx, entry) in all_entries.iter().enumerate().skip(scroll_offset) {
         if lines.len() >= height {
@@ -266,7 +267,8 @@ pub fn draw_entry_list(
         if show_groups {
             let group = date_group_label(&entry.last_copied);
             if current_group != Some(group) {
-                lines.push(make_group_header_line(group, width));
+                let header = make_group_header_line(group, width);
+                lines.push(header.patch_style(Style::default().bg(BASE_BG)));
                 current_group = Some(group);
                 if lines.len() >= height {
                     break;
@@ -293,74 +295,79 @@ pub fn draw_entry_list(
         let pad = content_max_width.saturating_sub(content_len);
         let selector = if is_selected { "▶ " } else { "  " };
 
-        let line = if filter_text.is_empty() {
+        let mut spans: Vec<Span> = if filter_text.is_empty() {
             let selector_style = if is_selected {
                 Style::default().fg(ACCENT)
             } else {
                 Style::default().fg(BORDER_FG)
             };
-            let mut spans: Vec<Span> = vec![Span::styled(selector.to_string(), selector_style)];
-            spans.extend(build_content_spans(&content_truncated, is_selected));
+            let mut s: Vec<Span> = vec![Span::styled(selector.to_string(), selector_style)];
+            s.extend(build_content_spans(&content_truncated, is_selected));
             if pad > 0 {
-                spans.push(Span::raw(" ".repeat(pad)));
+                s.push(Span::raw(" ".repeat(pad)));
             }
             let date_style = if is_selected {
                 Style::default().fg(HELP_FG)
             } else {
                 Style::default().fg(DIM)
             };
-            spans.push(Span::styled(format!("{:>10}", date_str), date_style));
-            let line = Line::from(spans);
-            if is_selected {
-                line.patch_style(Style::default().bg(HIGHLIGHT_BG))
-            } else {
-                line
-            }
+            s.push(Span::styled(format!("{:>10}", date_str), date_style));
+            s
         } else {
             let fuzzy_result = fuzzy::fuzzy_match(&content_truncated, filter_text);
-            let mut spans: Vec<Span> = vec![Span::raw(selector.to_string())];
+            let mut s: Vec<Span> = vec![Span::raw(selector.to_string())];
 
             if fuzzy_result.matched {
                 let chars: Vec<char> = content_truncated.chars().collect();
                 let mut last_pos = 0;
                 for (match_start, match_len) in &fuzzy_result.match_positions {
                     if *match_start > last_pos {
-                        spans.push(Span::styled(
+                        s.push(Span::styled(
                             chars[last_pos..*match_start].iter().collect::<String>(),
                             Style::default().fg(DIM),
                         ));
                     }
-                    spans.push(Span::styled(
+                    s.push(Span::styled(
                         chars[*match_start..(*match_start + match_len)].iter().collect::<String>(),
                         Style::default().bg(MATCH_FG).fg(BASE_BG),
                     ));
                     last_pos = *match_start + match_len;
                 }
                 if last_pos < chars.len() {
-                    spans.push(Span::styled(
+                    s.push(Span::styled(
                         chars[last_pos..].iter().collect::<String>(),
                         Style::default().fg(DIM),
                     ));
                 }
             } else {
-                spans.push(Span::styled(content_truncated.clone(), Style::default().fg(DIM)));
+                s.push(Span::styled(content_truncated.clone(), Style::default().fg(DIM)));
             }
 
-            let current_len: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+            let current_len: usize = s.iter().map(|sp| sp.content.chars().count()).sum();
             let padding = content_max_width.saturating_sub(current_len.saturating_sub(2));
             if padding > 0 {
-                spans.push(Span::raw(" ".repeat(padding)));
+                s.push(Span::raw(" ".repeat(padding)));
             }
-            spans.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(DIM)));
-            let line = Line::from(spans);
-            if is_selected {
-                line.patch_style(Style::default().fg(FG).bg(HIGHLIGHT_BG))
-            } else {
-                line
-            }
+            s.push(Span::styled(format!("{:>10}", date_str), Style::default().fg(DIM)));
+            s
         };
 
-        lines.push(line);
+        // Pad to full row width so patch_style bg fills the entire cell row
+        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+        let trail = width.saturating_sub(used);
+        if trail > 0 {
+            spans.push(Span::raw(" ".repeat(trail)));
+        }
+
+        let row_bg = if is_selected {
+            HIGHLIGHT_BG
+        } else if entry_row_idx % 2 == 0 {
+            ZEBRA_BG
+        } else {
+            BASE_BG
+        };
+        lines.push(Line::from(spans).patch_style(Style::default().bg(row_bg)));
+        entry_row_idx += 1;
     }
 
     f.render_widget(

@@ -4,6 +4,7 @@ use ratatui::style::Color;
 // Ported from ../scrn
 
 pub const BASE_BG: Color = Color::Rgb(18, 18, 24);
+pub const ZEBRA_BG: Color = Color::Rgb(30, 30, 40);
 pub const HIGHLIGHT_BG: Color = Color::Rgb(55, 55, 80);
 
 pub const FG: Color = Color::Rgb(220, 220, 230);
