@@ -9,10 +9,12 @@ pub fn fuzzy_match(text: &str, query: &str) -> FuzzyMatch {
     let text_lower = text.to_lowercase();
     let query_lower = query.to_lowercase();
 
-    if let Some(pos) = text_lower.find(&query_lower) {
+    if let Some(byte_pos) = text_lower.find(&query_lower) {
+        let char_pos = text_lower[..byte_pos].chars().count();
+        let char_len = query_lower.chars().count();
         return FuzzyMatch {
             matched: true,
-            match_positions: vec![(pos, query_lower.len())],
+            match_positions: vec![(char_pos, char_len)],
             is_exact: true,
         };
     }
